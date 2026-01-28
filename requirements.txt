@@ -1,0 +1,18 @@
+# Intervals Generator - Dependencies
+
+# Data processing
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Progress and logging
+tqdm>=4.64.0
+
+# File watching
+watchdog>=3.0.0
+
+# Report generation
+jinja2>=3.1.0
+
+# GUI (optional)
+streamlit>=1.28.0
+plotly>=5.0.0

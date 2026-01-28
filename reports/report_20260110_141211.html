@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intervals Generator - Raport 10.01.2026</title>
+    <style>
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --accent: #e94560;
+            --accent-light: #ff6b6b;
+            --text: #eaeaea;
+            --text-muted: #a0a0a0;
+            --success: #4ade80;
+            --warning: #fbbf24;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, var(--bg-card), #0f3460);
+            border-radius: 16px;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, var(--accent), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle { color: var(--text-muted); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h3 {
+            color: var(--accent);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .stat { font-size: 2.5rem; font-weight: 700; color: var(--accent-light); }
+        .stat-label { color: var(--text-muted); font-size: 0.9rem; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th { color: var(--accent); font-weight: 600; }
+        tr:hover { background: rgba(233, 69, 96, 0.1); }
+        .warning { color: var(--warning); }
+        .success { color: var(--success); }
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            padding: 1rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏋️ Intervals Generator</h1>
+            <p class="subtitle">Raport z przetwarzania danych treningowych</p>
+            <p class="subtitle">10.01.2026</p>
+        </header>
+        
+        <div class="grid">
+            <div class="card">
+                <h3>📊 Podsumowanie</h3>
+                <div class="stat">8214</div>
+                <div class="stat-label">wierszy danych</div>
+            </div>
+            <div class="card">
+                <h3>📈 Kolumny</h3>
+                <div class="stat">17</div>
+                <div class="stat-label">zmiennych</div>
+            </div>
+            <div class="card">
+                <h3>⏱️ Czas trwania</h3>
+                <div class="stat">136</div>
+                <div class="stat-label">minut treningu</div>
+            </div>
+            <div class="card">
+                <h3>📁 Plik wynikowy</h3>
+                <div style="font-size: 1rem; word-break: break-all;">Trening-10.01.2026-import.csv</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>📋 Szczegóły kolumn</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Kolumna</th>
+                        <th>Typ</th>
+                        <th>Wartości</th>
+                        <th>Braki (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                <tr>
+                    <td>time</td>
+                    <td>float64</td>
+                    <td>0.0 - 8213.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>watts</td>
+                    <td>float64</td>
+                    <td>0.0 - 491.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>cadence</td>
+                    <td>float64</td>
+                    <td>0.0 - 116.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>heartrate</td>
+                    <td>float64</td>
+                    <td>90.0 - 154.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>distance</td>
+                    <td>float64</td>
+                    <td>0.3 - 84147.5</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>altitude</td>
+                    <td>float64</td>
+                    <td>49.2 - 185.2</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>lat</td>
+                    <td>float64</td>
+                    <td>40.7 - 40.8</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>lng</td>
+                    <td>float64</td>
+                    <td>-74.0 - -73.9</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>velocity_smooth</td>
+                    <td>float64</td>
+                    <td>0.0 - 21.9</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>torque</td>
+                    <td>float64</td>
+                    <td>0.0 - 52.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>PercentageinZ2</td>
+                    <td>float64</td>
+                    <td>0.0 - 0.8</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>TymeBreathRate</td>
+                    <td>float64</td>
+                    <td>21.2 - 48.8</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>tidal_volume</td>
+                    <td>float64</td>
+                    <td>99.3 - 349.7</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>TymeVentilation</td>
+                    <td>float64</td>
+                    <td>27.9 - 116.1</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>skin_temperature</td>
+                    <td>float64</td>
+                    <td>25.2 - 32.5</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>HeatStrainIndex</td>
+                    <td>float64</td>
+                    <td>0.0 - 0.9</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>hrv</td>
+                    <td>object</td>
+                    <td>8187 wartości</td>
+                    <td class="success">0.3%</td>
+                </tr>
+            
+                </tbody>
+            </table>
+        </div>
+        
+        
+        
+        <footer class="footer">
+            Wygenerowano przez Intervals Generator | 2026-01-10 14:12:11
+        </footer>
+    </div>
+</body>
+</html>

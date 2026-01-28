@@ -1,0 +1,96 @@
+# Column configuration for Intervals Generator
+# Defines required columns, mappings, and fallback values for each data source
+
+trainred:
+  # Detection pattern for files in Downloads
+  detection_pattern: "trainred"
+  file_pattern: "session_*.csv"
+  
+  # Required columns in source file
+  required_columns:
+    - SmO2
+    - THb unfiltered
+  
+  # Column name mapping (source -> output)
+  output_mapping:
+    SmO2: smo2
+    "THb unfiltered": THb
+  
+  # Fallback values when data is missing
+  fallback_values:
+    smo2: 0.0
+    THb: 0.0
+  
+  # Normalization settings (TrainRed is high-frequency)
+  normalization:
+    enabled: true
+    target_hz: 1
+    timestamp_column: "Timestamp (seconds passed)"
+
+tymewear:
+  detection_pattern: null  # Detected by column content, not filename
+  detection_columns: [BR, VT, VE]  # All must be present
+  
+  required_columns:
+    - BR
+    - VT
+    - VE
+  
+  output_mapping:
+    BR: TymeBreathRate
+    VT: tidal_volume
+    VE: TymeVentilation
+  
+  fallback_values:
+    TymeBreathRate: 0.0
+    tidal_volume: 0.0
+    TymeVentilation: 0.0
+  
+  # Skip legend row (row 2 in Tymewear exports)
+  skip_legend_row: true
+
+wahoo:
+  detection_pattern: "*streams.csv"
+  detection_exclude_columns: [hrv]  # Exclude files with hrv (those are Garmin)
+  
+  # Wahoo is the base file - all columns kept
+  required_columns: []
+  output_mapping: {}
+  fallback_values: {}
+  
+  # Rename file to standard name
+  rename_to: "Wahoo.csv"
+
+garmin:
+  detection_pattern: "*streams.csv"
+  detection_require_columns: [hrv]  # Must have hrv column
+  
+  required_columns: []
+  
+  # Extract specific columns
+  extract_columns:
+    - skin_temperature
+    - HeatStrainIndex
+    - core_temperature
+    - hrv
+  
+  output_mapping: {}
+  
+  fallback_values:
+    skin_temperature: null
+    HeatStrainIndex: null
+    hrv: null
+  
+  # Clean up leading NaN rows
+  trim_leading_nans: true
+  trim_max_rows: 30
+
+# Global validation settings
+validation:
+  max_consecutive_nans: 10  # Alert if more than 10 consecutive NaN
+  require_wahoo_base: true  # Wahoo.csv is required for merge
+  
+# Output settings
+output:
+  filename_pattern: "Trening-{date}-import.csv"
+  date_format: "%d.%m.%Y"

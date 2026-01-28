@@ -1,0 +1,65 @@
+2026-01-24 14:37:57 | INFO     | 📦 Tworzenie backupu: backup_20260124_143757
+2026-01-24 14:38:39 | INFO     |    ✅ Skopiowano 87 plików do backupu
+2026-01-24 14:38:39 | INFO     |    💾 Backup utworzony: /Users/wielkikrzych/Desktop/Intervals_Generator/backups/backup_20260124_143757
+2026-01-24 14:38:39 | INFO     | === INTERVALS GENERATOR - Loaders: Wahoo, TrainRed, Tymewear, Garmin ===
+2026-01-24 14:38:39 | INFO     | 🧹 CZYSZCZENIE FOLDERÓW - przenoszę istniejące pliki do *_old
+2026-01-24 14:38:39 | INFO     | Wahoo: 1 plików -> *_old
+2026-01-24 14:38:39 | INFO     | TrainRed: 1 plików -> *_old
+2026-01-24 14:38:39 | INFO     | Tymewear: 1 plików -> *_old
+2026-01-24 14:38:39 | INFO     | Garmin: 1 plików -> *_old
+2026-01-24 14:38:39 | INFO     | 🧹 Archiwizacja starych plików wynikowych do 5_Treningi_Old
+2026-01-24 14:38:39 | INFO     | 📦 Przeniesiono: Trening-21.01.2026-import.csv
+2026-01-24 14:38:39 | INFO     | 🧹 CZYSZCZENIE ZAKOŃCZONE: Łącznie przeniesiono 5 plików.
+2026-01-24 14:38:39 | INFO     | Szukam plików TrainRed w Downloads...
+2026-01-24 14:38:39 | INFO     | Znaleziono TrainRed (SmO2+THb): session_20260124_110120.csv
+2026-01-24 14:38:39 | INFO     | 🗑️  Przeniesiono do: 1_TrainRed_files/
+2026-01-24 14:38:39 | INFO     | Szukam plików Tymewear w Downloads (analiza CAŁEJ zawartości: BR, VT, VE)...
+2026-01-24 14:38:39 | INFO     | Wykryto i skopiowano Tymewear: sst_4x10_____endurance_2026-01-24.csv
+2026-01-24 14:38:39 | INFO     | 🗑️  Usunięto z Downloads: sst_4x10_____endurance_2026-01-24.csv
+2026-01-24 14:38:39 | INFO     | Szukam plików '*streams.csv' w Downloads...
+2026-01-24 14:38:39 | INFO     | Znaleziono 2 plików streams.csv
+2026-01-24 14:38:39 | INFO     | Skopiowano: i120170678_streams.csv -> /Users/wielkikrzych/Desktop/Intervals_Generator
+2026-01-24 14:38:39 | INFO     | 🗑️ Usunięto z Downloads: i120170678_streams.csv
+2026-01-24 14:38:39 | INFO     | Skopiowano: i120170752_streams.csv -> /Users/wielkikrzych/Desktop/Intervals_Generator
+2026-01-24 14:38:39 | INFO     | 🗑️ Usunięto z Downloads: i120170752_streams.csv
+2026-01-24 14:38:39 | INFO     | 🔎 Analiza nagłówków '*streams.csv' w BASE_DIR...
+2026-01-24 14:38:39 | INFO     | i120170678_streams.csv -> WAHOO (bez 'hrv'), przeniesiono do: /Users/wielkikrzych/Desktop/Intervals_Generator/3_Wahoo_files
+2026-01-24 14:38:39 | INFO     | i120170752_streams.csv -> GARMIN (ma 'hrv'), przeniesiono do: /Users/wielkikrzych/Desktop/Intervals_Generator/4_Garmin_files
+2026-01-24 14:38:39 | INFO     | 🔁 Normalizacja TrainRed do 1 Hz
+2026-01-24 14:38:39 | INFO     | Znaleziono 1 plików CSV do przetworzenia
+2026-01-24 14:38:41 | INFO     | session_20260124_110120_avg.csv (wiersze: 7226)
+2026-01-24 14:38:41 | INFO     | 🧪 Ekstrakcja smo2 i THb z plików *_avg.csv
+2026-01-24 14:38:41 | INFO     | session_20260124_110120_avg_clean.csv (kolumny: smo2, THb)
+2026-01-24 14:38:41 | INFO     | 🧪 Ekstrakcja TymeBreathRate, tidal_volume, TymeVentilation z plików Tymewear
+2026-01-24 14:38:41 | INFO     | Znaleziono 1 plików CSV w 2_Tymewear_files
+2026-01-24 14:38:41 | INFO     | sst_4x10_____endurance_2026-01-24_clean.csv bez drugiego wiersza (legendy)
+2026-01-24 14:38:41 | INFO     | ↪ przeniesiono oryginalny Tymewear: sst_4x10_____endurance_2026-01-24.csv -> Tymewear_files_old
+2026-01-24 14:38:41 | INFO     | 🧪 Ekstrakcja Garmin streams (skin_temperature, HeatStrainIndex, hrv)
+2026-01-24 14:38:41 | INFO     | Znaleziono 1 plików CSV w 4_Garmin_files
+2026-01-24 14:38:41 | INFO     | i120170752_streams_clean.csv (kolumny: hrv, usunięto 1 wierszy z góry)
+2026-01-24 14:38:41 | INFO     | ↪ przeniesiono oryginalny Garmin: i120170752_streams.csv -> Garmin_files_old
+2026-01-24 14:38:41 | INFO     | 🛡️  WALIDACJA DANYCH (Szukanie dziur > 10 wierszy)
+2026-01-24 14:38:41 | INFO     | ----------------------------------------
+2026-01-24 14:38:41 | INFO     | ⚡ Czytanie 4 plików równolegle...
+2026-01-24 14:38:41 | INFO     | Walidacja OK: Brak ciągłych luk powyżej 10 wierszy.
+2026-01-24 14:38:41 | INFO     | 🔗 MERGING WSZYSTKICH DANYCH (Baza: Wahoo.csv)
+2026-01-24 14:38:41 | INFO     | ----------------------------------------
+2026-01-24 14:38:41 | INFO     | Przygotowano dane z session_20260124_110120_avg_clean.csv
+2026-01-24 14:38:41 | INFO     | Przygotowano dane z sst_4x10_____endurance_2026-01-24_clean.csv
+2026-01-24 14:38:41 | INFO     | Przygotowano dane z i120170752_streams_clean.csv
+2026-01-24 14:38:41 | INFO     | ⚡ Wykonuję batch concat (4 DataFrames)...
+2026-01-24 14:38:41 | INFO     | Połączono wszystkie dane: 17 kolumn
+2026-01-24 14:38:41 | INFO     | ✂️  WALIDACJA POCZĄTKU PLIKU (Synchronizacja startu)
+2026-01-24 14:38:41 | INFO     | Pierwszy wiersz jest kompletny. Brak linii do usunięcia z początku.
+2026-01-24 14:38:41 | INFO     | ✂️  WALIDACJA KOŃCÓWKI PLIKU (Synchronizacja długości)
+2026-01-24 14:38:41 | WARNING  | Znaleziono 20 niepełnych linii na KOŃCU pliku.
+2026-01-24 14:38:41 | INFO     | (Całkowita długość: 7226, Ostatni w pełni wypełniony wiersz: 7205)
+2026-01-24 14:38:41 | INFO     | AUTO-CONFIRM: Czy usunąć 20 ostatnich linii?
+2026-01-24 14:38:41 | INFO     | ✂️  Usunięto 20 linii. Nowa długość: 7206
+2026-01-24 14:38:41 | INFO     | 🎉 UTWORZONO: /Users/wielkikrzych/Desktop/Intervals_Generator/Trening-24.01.2026-import.csv
+2026-01-24 14:38:41 | INFO     | 📈 Kolumny: 17
+2026-01-24 14:38:41 | INFO     | 📊 Wiersze:  7206
+2026-01-24 14:38:41 | INFO     | 📋 PRZYKŁADOWE KOLUMNY:
+2026-01-24 14:38:41 | INFO     | time, watts, cadence, heartrate, distance, altitude, lat, lng, velocity_smooth, torque ...
+2026-01-24 14:38:41 | INFO     | 📝 Generowanie raportu HTML...
+2026-01-24 14:38:41 | INFO     |    ✅ Raport zapisany: /Users/wielkikrzych/Desktop/Intervals_Generator/reports/report_20260124_143841.html

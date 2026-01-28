@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intervals-generator-csv"
+version = "1.0.0"
+description = "Automatyczny import i scalanie danych treningowych z wielu źródeł (TrainRed, Tymewear, Wahoo, Garmin)"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "WielkiKrzych", email = "wielkikrzych@example.com"}
+]
+keywords = [
+    "training", "cycling", "data", "csv", "merge", "intervals",
+    "trainred", "wahoo", "garmin", "tymewear", "smo2", "hrv"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.65.0",
+    "watchdog>=3.0.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "streamlit>=1.28.0",
+    "plotly>=5.18.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "flake8>=6.1.0",
+    "mypy>=1.6.0",
+    "black>=23.10.0",
+]
+all = [
+    "intervals-generator-csv[gui,dev]",
+]
+
+[project.scripts]
+intervals-generator = "intervals.cli:main"
+intervals-watch = "intervals.cli:watch"
+
+[project.urls]
+Homepage = "https://github.com/WielkiKrzych/Intervals_Generator_CSV"
+Documentation = "https://github.com/WielkiKrzych/Intervals_Generator_CSV/tree/main/docs"
+Repository = "https://github.com/WielkiKrzych/Intervals_Generator_CSV"
+Issues = "https://github.com/WielkiKrzych/Intervals_Generator_CSV/issues"
+
+[tool.setuptools]
+packages = ["intervals", "intervals.loaders", "intervals.validators"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+intervals = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.flake8]
+max-line-length = 100
+exclude = [".git", "__pycache__", "build", "dist", "*.egg-info"]

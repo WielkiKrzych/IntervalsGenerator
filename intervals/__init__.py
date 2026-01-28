@@ -1,0 +1,1 @@
+# Intervals Generator - SOLID Refactored

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intervals Generator - Raport 06.01.2026</title>
+    <style>
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --accent: #e94560;
+            --accent-light: #ff6b6b;
+            --text: #eaeaea;
+            --text-muted: #a0a0a0;
+            --success: #4ade80;
+            --warning: #fbbf24;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, var(--bg-card), #0f3460);
+            border-radius: 16px;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, var(--accent), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle { color: var(--text-muted); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h3 {
+            color: var(--accent);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .stat { font-size: 2.5rem; font-weight: 700; color: var(--accent-light); }
+        .stat-label { color: var(--text-muted); font-size: 0.9rem; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th { color: var(--accent); font-weight: 600; }
+        tr:hover { background: rgba(233, 69, 96, 0.1); }
+        .warning { color: var(--warning); }
+        .success { color: var(--success); }
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            padding: 1rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏋️ Intervals Generator</h1>
+            <p class="subtitle">Raport z przetwarzania danych treningowych</p>
+            <p class="subtitle">06.01.2026</p>
+        </header>
+        
+        <div class="grid">
+            <div class="card">
+                <h3>📊 Podsumowanie</h3>
+                <div class="stat">1675</div>
+                <div class="stat-label">wierszy danych</div>
+            </div>
+            <div class="card">
+                <h3>📈 Kolumny</h3>
+                <div class="stat">15</div>
+                <div class="stat-label">zmiennych</div>
+            </div>
+            <div class="card">
+                <h3>⏱️ Czas trwania</h3>
+                <div class="stat">27</div>
+                <div class="stat-label">minut treningu</div>
+            </div>
+            <div class="card">
+                <h3>📁 Plik wynikowy</h3>
+                <div style="font-size: 1rem; word-break: break-all;">Trening-06.01.2026-import.csv</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>📋 Szczegóły kolumn</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Kolumna</th>
+                        <th>Typ</th>
+                        <th>Wartości</th>
+                        <th>Braki (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                <tr>
+                    <td>time</td>
+                    <td>float64</td>
+                    <td>0.0 - 1674.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>watts</td>
+                    <td>float64</td>
+                    <td>0.0 - 600.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>cadence</td>
+                    <td>float64</td>
+                    <td>2.0 - 88.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>heartrate</td>
+                    <td>float64</td>
+                    <td>93.0 - 161.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>distance</td>
+                    <td>float64</td>
+                    <td>1.8 - 5712.2</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>velocity_smooth</td>
+                    <td>float64</td>
+                    <td>0.0 - 4.5</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>torque</td>
+                    <td>float64</td>
+                    <td>0.0 - 1327.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>PercentageinZ2</td>
+                    <td>float64</td>
+                    <td>0.0 - 0.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>VerticalOscillation</td>
+                    <td>float64</td>
+                    <td>2.7 - 115.0</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>smo2</td>
+                    <td>float64</td>
+                    <td>21.0 - 71.9</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>THb</td>
+                    <td>float64</td>
+                    <td>52.1 - 107.2</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>TymeBreathRate</td>
+                    <td>float64</td>
+                    <td>13.6 - 46.7</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>tidal_volume</td>
+                    <td>float64</td>
+                    <td>211.4 - 378.2</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>TymeVentilation</td>
+                    <td>float64</td>
+                    <td>56.6 - 134.7</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                <tr>
+                    <td>hrv</td>
+                    <td>object</td>
+                    <td>1675 wartości</td>
+                    <td class="success">0.0%</td>
+                </tr>
+            
+                </tbody>
+            </table>
+        </div>
+        
+        
+        
+        <footer class="footer">
+            Wygenerowano przez Intervals Generator | 2026-01-06 15:11:42
+        </footer>
+    </div>
+</body>
+</html>

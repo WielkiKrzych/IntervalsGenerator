@@ -1,0 +1,21 @@
+2025-12-30 15:24:39 | WARNING  | TRYB DRY-RUN: Żadne pliki nie zostaną zmodyfikowane!
+2025-12-30 15:24:39 | INFO     | === INTERVALS GENERATOR - IMPORT TRAINRED + TYMEWEAR + STREAMS ===
+2025-12-30 15:24:39 | INFO     | 🧹 CZYSZCZENIE FOLDERÓW - przenoszę istniejące pliki do *_old
+2025-12-30 15:24:39 | INFO     | 🧹 Archiwizacja starych plików wynikowych do 5_Treningi_Old
+2025-12-30 15:24:39 | INFO     | (Brak plików Trening-*.csv w głównym katalogu)
+2025-12-30 15:24:39 | INFO     | 🧹 CZYSZCZENIE ZAKOŃCZONE: Łącznie przeniesiono 0 plików.
+2025-12-30 15:24:39 | INFO     | Szukam plików TrainRed w Downloads...
+2025-12-30 15:24:39 | WARNING  | Nie znaleziono pliku z 'TrainRed' w nazwie w folderze Downloads.
+2025-12-30 15:24:39 | INFO     | Szukam plików Tymewear w Downloads (analiza CAŁEJ zawartości: BR, VT, VE)...
+2025-12-30 15:24:39 | INFO     | ⏭️  Brak plików z sygnaturą BR/VT/VE w Downloads
+2025-12-30 15:24:39 | INFO     | Szukam plików '*streams.csv' w Downloads...
+2025-12-30 15:24:39 | INFO     | Znaleziono 0 plików streams.csv
+2025-12-30 15:24:39 | INFO     | 🔎 Analiza nagłówków '*streams.csv' w BASE_DIR...
+2025-12-30 15:24:39 | INFO     | 🧪 Ekstrakcja TymeBreathRate, tidal_volume, TymeVentilation z plików Tymewear
+2025-12-30 15:24:39 | INFO     | Znaleziono 0 plików CSV w 2_Tymewear_files
+2025-12-30 15:24:39 | INFO     | 🧪 Ekstrakcja Garmin streams (skin_temperature, HeatStrainIndex, hrv)
+2025-12-30 15:24:39 | INFO     | Znaleziono 0 plików CSV w 4_Garmin_files
+2025-12-30 15:24:39 | INFO     | 🛡️  WALIDACJA DANYCH (Szukanie dziur > 10 wierszy)
+2025-12-30 15:24:39 | INFO     | SUCCESS: Walidacja OK: Brak ciągłych luk powyżej 10 wierszy.
+2025-12-30 15:24:39 | ERROR    | BŁĄD KRYTYCZNY: Nie znaleziono pliku /Users/wielkikrzych/Desktop/Intervals_Generator/3_Wahoo_files/Wahoo.csv!
+2025-12-30 15:24:39 | ERROR    | Nie można kontynuować bez pliku Wahoo.csv

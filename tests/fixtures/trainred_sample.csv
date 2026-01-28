@@ -1,0 +1,21 @@
+Timestamp (seconds passed),SmO2,THb unfiltered,Device
+0.0,65.2,12.1,Sensor1
+0.1,65.3,12.0,Sensor1
+0.2,65.1,12.2,Sensor1
+0.3,65.0,12.1,Sensor1
+0.4,64.9,12.0,Sensor1
+0.5,64.8,11.9,Sensor1
+0.6,64.7,11.8,Sensor1
+0.7,64.6,11.9,Sensor1
+0.8,64.5,12.0,Sensor1
+0.9,64.4,12.1,Sensor1
+1.0,64.3,12.0,Sensor1
+1.1,64.2,11.9,Sensor1
+1.2,64.1,11.8,Sensor1
+1.3,64.0,11.9,Sensor1
+1.4,63.9,12.0,Sensor1
+1.5,63.8,12.1,Sensor1
+1.6,63.7,12.0,Sensor1
+1.7,63.6,11.9,Sensor1
+1.8,63.5,11.8,Sensor1
+1.9,63.4,11.9,Sensor1
