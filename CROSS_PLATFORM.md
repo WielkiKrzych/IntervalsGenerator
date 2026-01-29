@@ -110,7 +110,7 @@ These are excluded from version control because they're platform-specific build 
 
 ## Syncing Between Devices
 
-### On Windows (Laptop)
+### On Windows
 1. Work on Windows (building .exe, testing, etc.)
 2. Commit changes:
    ```bash
@@ -122,7 +122,7 @@ These are excluded from version control because they're platform-specific build 
    git push
    ```
 
-### On macOS (Mac Mini)
+### On macOS
 1. Pull latest changes:
    ```bash
    cd ~/Desktop/IntervalsGenerator/IntervalsGenerator
