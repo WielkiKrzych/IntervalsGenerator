@@ -7,12 +7,12 @@
 
 ## 🚀 Szybki Start
 
-### macOS (Mac Mini)
+### macOS
 1. Przeciągnij pliki CSV na `MergeCSV.app`
 2. Poczekaj na przetwarzanie
 3. Plik `Trening-*.csv` pojawi się w tym samym folderze
 
-### Windows (Laptop)
+### Windows
 **Sposób 1 - Drag & Drop:**
 1. Przeciągnij pliki CSV na `MergeCSV.exe`
 2. Poczekaj na przetwarzanie
