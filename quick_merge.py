@@ -53,10 +53,10 @@ def detect_file_type(filepath: Path) -> Optional[str]:
             content = "\n".join(lines).lower()
             first_line = lines[0].lower() if lines else ""
 
-            if filepath.name.endswith("streams.csv") or "secs" in first_line:
+            if filepath.name.endswith("streams.csv") or "secs" in first_line or "time,watts" in first_line:
                 if "hrv" in first_line:
                     return "garmin"
-                elif "secs" in first_line or "watts" in first_line:
+                elif "secs" in first_line or "watts" in first_line or "time,watts" in first_line:
                     return "wahoo"
 
             if "smo2" in content and "thb" in content:
