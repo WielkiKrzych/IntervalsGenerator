@@ -238,28 +238,48 @@ class Pipeline:
         """
         Merge all processed files into final training file.
 
-        Uses Wahoo as base, then merges clean files from all other loaders.
+        Uses Wahoo as base (if available), otherwise Garmin.
+        Then merges clean files from all other loaders.
 
         Returns:
             Path to the created file, or None if failed
         """
-        # Get base DataFrame from Wahoo
+        # Determine base loader: Wahoo first, then Garmin as fallback
+        base_loader = None
+        base_loader_name = None
+
         wahoo = self.get_loader("wahoo")
-        if not wahoo or not hasattr(wahoo, "get_base_dataframe"):
+        if wahoo and hasattr(wahoo, "get_base_dataframe"):
+            wahoo_df = wahoo.get_base_dataframe()
+            if not wahoo_df.empty:
+                base_loader = wahoo
+                base_loader_name = "wahoo"
+                self.ui.print_message("📁 Baza: Wahoo.csv")
+
+        if base_loader is None:
+            garmin = self.get_loader("garmin")
+            if garmin and hasattr(garmin, "get_base_dataframe"):
+                garmin_df = garmin.get_base_dataframe()
+                if not garmin_df.empty:
+                    base_loader = garmin
+                    base_loader_name = "garmin"
+                    self.ui.print_message("📁 Baza: Garmin.csv (brak Wahoo)")
+
+        if base_loader is None:
             self.ui.print_error(
-                "Nie znaleziono loadera Wahoo lub brak metody get_base_dataframe"
+                "Nie znaleziono pliku bazowego (Wahoo.csv ani Garmin.csv)"
             )
             return None
 
-        base_df = wahoo.get_base_dataframe()
+        base_df = base_loader.get_base_dataframe()
         if base_df.empty:
-            self.ui.print_error("Nie można kontynuować bez pliku Wahoo.csv")
+            self.ui.print_error("Nie można kontynuować bez pliku bazowego")
             return None
 
-        # Collect all clean files from non-Wahoo loaders
+        # Collect all clean files from non-base loaders
         clean_files = []
         for loader in self.loaders:
-            if loader.name.lower() != "wahoo":
+            if loader.name.lower() != base_loader_name:
                 clean_files.extend(loader.get_clean_files())
 
         # Merge

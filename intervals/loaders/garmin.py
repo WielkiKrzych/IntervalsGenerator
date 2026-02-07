@@ -268,3 +268,41 @@ class GarminLoader(BaseLoader):
             List[Path]: Paths to *_clean.csv files
         """
         return self.fs.glob(self.source_dir, "*_clean.csv")
+
+    def get_base_dataframe(self) -> pd.DataFrame:
+        """
+        Load Garmin.csv as the base DataFrame for merging (when Wahoo is not available).
+
+        This serves as the PRIMARY data for the merge operation when Wahoo is missing.
+        All other data sources align to this DataFrame's row count.
+
+        Returns:
+            pd.DataFrame: Garmin data, or empty DataFrame if not found
+
+        Failure Modes:
+            - Returns empty DataFrame if file not found
+            - Logs critical error to UI
+        """
+        garmin_files = self.fs.glob(self.source_dir, "*.csv")
+        garmin_files = [f for f in garmin_files if "_clean" not in f.name]
+
+        if not garmin_files:
+            return pd.DataFrame()
+
+        garmin_file = garmin_files[0]
+        if not self.fs.exists(garmin_file):
+            self.ui.print_error(f"BŁĄD KRYTYCZNY: Nie znaleziono pliku {garmin_file}!")
+            return pd.DataFrame()
+
+        try:
+            df = self.fs.read_csv(garmin_file)
+            # Keep only essential columns for base: secs + any wanted columns
+            present = [c for c in self.WANTED_COLUMNS if c in df.columns]
+            if "secs" in df.columns:
+                cols_to_keep = ["secs"] + present
+                return df[cols_to_keep].copy()
+            return df
+        except (OSError, pd.errors.ParserError) as e:
+            logger.error(f"Błąd odczytu bazy Garmin {garmin_file}: {e}")
+            self.ui.print_error(f"Błąd odczytu bazy Garmin: {e}")
+            return pd.DataFrame()
