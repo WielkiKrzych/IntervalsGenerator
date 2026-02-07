@@ -155,7 +155,7 @@ def process_tymewear(filepath: Path) -> pd.DataFrame:
     return df_out
 
 
-def process_garmin(filepath: Path) -> pd.DataFrame:
+def process_garmin(filepath: Path, include_secs: bool = True) -> pd.DataFrame:
     print(f"  [Garmin] Processing: {filepath.name}")
 
     df = pd.read_csv(filepath)
@@ -166,7 +166,12 @@ def process_garmin(filepath: Path) -> pd.DataFrame:
         print(f"    -> Error: missing columns {GARMIN_COLUMNS}")
         return pd.DataFrame()
 
-    df_out = df[present].copy()
+    # Include secs column if present (needed for base file)
+    cols_to_keep = present.copy()
+    if include_secs and "secs" in df.columns and "secs" not in cols_to_keep:
+        cols_to_keep.insert(0, "secs")
+
+    df_out = df[cols_to_keep].copy()
     df_out = df_out.replace(r"^\s*$", np.nan, regex=True)
 
     head_n = min(30, len(df_out))
@@ -267,13 +272,30 @@ def main():
         else:
             files_by_type["unknown"].append(f)
 
-    if not files_by_type["wahoo"]:
-        print("\nError: Wahoo base file missing!")
+    # Determine base file: Wahoo first, then Garmin as fallback
+    base_file = None
+    base_type = None
+
+    if files_by_type["wahoo"]:
+        base_file = files_by_type["wahoo"][0]
+        base_type = "wahoo"
+        print(f"\nBase: Wahoo ({base_file.name})")
+    elif files_by_type["garmin"]:
+        base_file = files_by_type["garmin"][0]
+        base_type = "garmin"
+        print(f"\nBase: Garmin ({base_file.name}) - no Wahoo found")
+
+    if not base_file:
+        print("\nError: No base file found (Wahoo or Garmin required)!")
         return 1
 
     print("\n" + "=" * 60 + "\nPROCESSING FILES\n" + "=" * 60)
 
-    base_df = process_wahoo(files_by_type["wahoo"][0])
+    if base_type == "wahoo":
+        base_df = process_wahoo(base_file)
+    else:
+        base_df = process_garmin(base_file)
+
     if base_df.empty:
         return 1
 
@@ -286,10 +308,12 @@ def main():
         df = process_tymewear(f)
         if not df.empty:
             other_dfs.append(df)
-    for f in files_by_type["garmin"]:
-        df = process_garmin(f)
-        if not df.empty:
-            other_dfs.append(df)
+    # Process Garmin files only if Wahoo is base (otherwise Garmin IS the base)
+    if base_type == "wahoo":
+        for f in files_by_type["garmin"]:
+            df = process_garmin(f, include_secs=False)
+            if not df.empty:
+                other_dfs.append(df)
 
     print("\n" + "=" * 60 + "\nMERGING DATA\n" + "=" * 60)
     df_merged = merge_dataframes(base_df, other_dfs)
@@ -305,8 +329,8 @@ def main():
 
         if args.files:
             output_dir = args.files[0].parent
-        elif files_by_type["wahoo"]:
-            output_dir = files_by_type["wahoo"][0].parent
+        elif base_file:
+            output_dir = base_file.parent
         else:
             output_dir = Path.cwd()
 

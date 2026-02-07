@@ -34,7 +34,7 @@ def test_quick_merge_no_wahoo(quick_merge_script, temp_dir):
         text=True,
     )
     assert result.returncode == 1
-    assert "Error: Wahoo base file missing" in result.stdout
+    assert "Error: No base file found" in result.stdout
 
 
 def test_quick_merge_success(quick_merge_script, temp_dir):
@@ -69,6 +69,43 @@ def test_quick_merge_success(quick_merge_script, temp_dir):
     assert "smo2" in merged_df.columns
     assert "THb" in merged_df.columns
     assert len(merged_df) == 3
+
+
+def test_quick_merge_garmin_as_base(quick_merge_script, temp_dir):
+    """Test merging with Garmin as base when Wahoo is not available."""
+    garmin_df = pd.DataFrame({
+        "secs": [0, 1, 2],
+        "hrv": [45, 48, 42],
+        "skin_temperature": [32.0, 32.1, 32.2]
+    })
+    garmin_path = temp_dir / "garmin_streams.csv"
+    garmin_df.to_csv(garmin_path, index=False)
+
+    trainred_df = pd.DataFrame({
+        "Timestamp (seconds passed)": [0.0, 0.1, 1.0, 1.1, 2.0],
+        "SmO2": [60, 61, 62, 63, 64],
+        "THb": [12, 12, 12, 12, 12],
+    })
+    trainred_path = temp_dir / "session_test.csv"
+    trainred_df.to_csv(trainred_path, index=False)
+
+    result = subprocess.run(
+        [sys.executable, str(quick_merge_script)],
+        cwd=temp_dir,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "Base: Garmin" in result.stdout
+
+    output_files = list(temp_dir.glob("Trening-*.csv"))
+    assert len(output_files) == 1
+
+    merged_df = pd.read_csv(output_files[0])
+    assert "secs" in merged_df.columns
+    assert "hrv" in merged_df.columns
+    assert "smo2" in merged_df.columns
+    assert "THb" in merged_df.columns
 
 
 def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):
