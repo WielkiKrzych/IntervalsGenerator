@@ -73,8 +73,14 @@ def test_quick_merge_success(quick_merge_script, temp_dir):
 
 def test_quick_merge_garmin_as_base(quick_merge_script, temp_dir):
     """Test merging with Garmin as base when Wahoo is not available."""
+    # Garmin with all typical columns (like real Garmin streams.csv)
     garmin_df = pd.DataFrame({
         "secs": [0, 1, 2],
+        "watts": [100, 110, 120],
+        "cadence": [80, 82, 84],
+        "heartrate": [140, 145, 150],
+        "speed": [8.5, 8.6, 8.7],
+        "distance": [100.0, 108.6, 117.2],
         "hrv": [45, 48, 42],
         "skin_temperature": [32.0, 32.1, 32.2]
     })
@@ -102,10 +108,21 @@ def test_quick_merge_garmin_as_base(quick_merge_script, temp_dir):
     assert len(output_files) == 1
 
     merged_df = pd.read_csv(output_files[0])
+    # All Garmin columns should be preserved
     assert "secs" in merged_df.columns
+    assert "watts" in merged_df.columns
+    assert "cadence" in merged_df.columns
+    assert "heartrate" in merged_df.columns
+    assert "speed" in merged_df.columns
+    assert "distance" in merged_df.columns
     assert "hrv" in merged_df.columns
+    assert "skin_temperature" in merged_df.columns
+    # TrainRed columns should be added
     assert "smo2" in merged_df.columns
     assert "THb" in merged_df.columns
+    # Verify data integrity
+    assert merged_df["watts"].tolist() == [100, 110, 120]
+    assert merged_df["cadence"].tolist() == [80, 82, 84]
 
 
 def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):

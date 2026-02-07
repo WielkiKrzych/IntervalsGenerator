@@ -155,7 +155,7 @@ def process_tymewear(filepath: Path) -> pd.DataFrame:
     return df_out
 
 
-def process_garmin(filepath: Path, include_secs: bool = True) -> pd.DataFrame:
+def process_garmin(filepath: Path, include_secs: bool = True, keep_all_columns: bool = False) -> pd.DataFrame:
     print(f"  [Garmin] Processing: {filepath.name}")
 
     df = pd.read_csv(filepath)
@@ -166,12 +166,17 @@ def process_garmin(filepath: Path, include_secs: bool = True) -> pd.DataFrame:
         print(f"    -> Error: missing columns {GARMIN_COLUMNS}")
         return pd.DataFrame()
 
-    # Include secs column if present (needed for base file)
-    cols_to_keep = present.copy()
-    if include_secs and "secs" in df.columns and "secs" not in cols_to_keep:
-        cols_to_keep.insert(0, "secs")
+    if keep_all_columns:
+        # When Garmin is the base, keep ALL columns from the original file
+        # This preserves watts, cadence, heartrate, etc.
+        df_out = df.copy()
+    else:
+        # When Garmin is an additional file, keep only GARMIN_COLUMNS
+        cols_to_keep = present.copy()
+        if include_secs and "secs" in df.columns and "secs" not in cols_to_keep:
+            cols_to_keep.insert(0, "secs")
+        df_out = df[cols_to_keep].copy()
 
-    df_out = df[cols_to_keep].copy()
     df_out = df_out.replace(r"^\s*$", np.nan, regex=True)
 
     head_n = min(30, len(df_out))
@@ -294,7 +299,8 @@ def main():
     if base_type == "wahoo":
         base_df = process_wahoo(base_file)
     else:
-        base_df = process_garmin(base_file)
+        # Garmin as base: keep ALL columns (watts, cadence, heartrate, etc.)
+        base_df = process_garmin(base_file, keep_all_columns=True)
 
     if base_df.empty:
         return 1

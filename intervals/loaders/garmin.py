@@ -296,12 +296,9 @@ class GarminLoader(BaseLoader):
 
         try:
             df = self.fs.read_csv(garmin_file)
-            # Keep only essential columns for base: secs + any wanted columns
-            present = [c for c in self.WANTED_COLUMNS if c in df.columns]
-            if "secs" in df.columns:
-                cols_to_keep = ["secs"] + present
-                return df[cols_to_keep].copy()
-            return df
+            # When Garmin is the base, keep ALL columns (not just wanted ones)
+            # This ensures watts, cadence, heartrate, etc. are preserved
+            return df.copy()
         except (OSError, pd.errors.ParserError) as e:
             logger.error(f"Błąd odczytu bazy Garmin {garmin_file}: {e}")
             self.ui.print_error(f"Błąd odczytu bazy Garmin: {e}")
