@@ -32,5 +32,5 @@ on open theFiles
 end open
 
 on run
-	display dialog "To jest aplikacja typu 'droplet'. Przeciągnij pliki CSV na ikonę MergeCSV, aby je połączyć." buttons {"OK"} default button "OK" with icon note
+	display dialog "To jest aplikacja typu 'droplet'. Przeciągnij pliki CSV i/lub FIT na ikonę MergeCSV, aby je połączyć." buttons {"OK"} default button "OK" with icon note
 end run

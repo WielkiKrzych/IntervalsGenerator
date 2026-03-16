@@ -55,11 +55,6 @@ class IntegrityValidator(Validator):
         fail_fast: bool = False,
         strict_mode: bool = False,
     ):
-        # Use default from config if not provided
-        if gap_threshold is None:
-            from ..config import Config
-
-            gap_threshold = Config.DEFAULT_GAP_THRESHOLD
         """
         Initialize validator.
 
@@ -69,6 +64,11 @@ class IntegrityValidator(Validator):
             fail_fast: Raise exception on first error (default: False)
             strict_mode: Treat warnings as errors (default: False)
         """
+        # Use default from config if not provided
+        if gap_threshold is None:
+            from ..config import Config
+
+            gap_threshold = Config.DEFAULT_GAP_THRESHOLD
         self._ui = ui
         self.gap_threshold = gap_threshold
         self.fail_fast = fail_fast

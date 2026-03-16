@@ -6,7 +6,7 @@ SCRIPT="$HOME/Documents/IntervalsGenerator/quick_merge.py"
 
 if [ $# -eq 0 ]; then
     osascript <<EOF
-display dialog "To jest aplikacja typu droplet. Przeciągnij pliki CSV na ikonę MergeCSV, aby je połączyć." buttons {"OK"} default button "OK" with icon note
+display dialog "To jest aplikacja typu droplet. Przeciągnij pliki CSV i/lub FIT na ikonę MergeCSV, aby je połączyć." buttons {"OK"} default button "OK" with icon note
 EOF
     exit 0
 fi

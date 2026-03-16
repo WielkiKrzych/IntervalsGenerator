@@ -82,7 +82,8 @@ def test_quick_merge_garmin_as_base(quick_merge_script, temp_dir):
         "speed": [8.5, 8.6, 8.7],
         "distance": [100.0, 108.6, 117.2],
         "hrv": [45, 48, 42],
-        "skin_temperature": [32.0, 32.1, 32.2]
+        "skin_temperature": [32.0, 32.1, 32.2],
+        "core_temperature": [37.0, 37.1, 37.2]
     })
     garmin_path = temp_dir / "garmin_streams.csv"
     garmin_df.to_csv(garmin_path, index=False)
@@ -117,12 +118,51 @@ def test_quick_merge_garmin_as_base(quick_merge_script, temp_dir):
     assert "distance" in merged_df.columns
     assert "hrv" in merged_df.columns
     assert "skin_temperature" in merged_df.columns
+    assert "core_temperature" in merged_df.columns
     # TrainRed columns should be added
     assert "smo2" in merged_df.columns
     assert "THb" in merged_df.columns
     # Verify data integrity
     assert merged_df["watts"].tolist() == [100, 110, 120]
     assert merged_df["cadence"].tolist() == [80, 82, 84]
+    assert merged_df["core_temperature"].tolist() == [37.0, 37.1, 37.2]
+
+
+def test_quick_merge_wahoo_with_garmin_core_temp(quick_merge_script, temp_dir):
+    """Test that core_temperature from Garmin is merged when Wahoo is base."""
+    wahoo_df = pd.DataFrame({"secs": [0, 1, 2], "watts": [100, 110, 120]})
+    wahoo_path = temp_dir / "activity_streams.csv"
+    wahoo_df.to_csv(wahoo_path, index=False)
+
+    # Garmin with core_temperature (as additional file, not base)
+    garmin_df = pd.DataFrame({
+        "secs": [0, 1, 2],
+        "hrv": [45, 48, 42],
+        "skin_temperature": [32.0, 32.1, 32.2],
+        "core_temperature": [37.0, 37.1, 37.2]
+    })
+    garmin_path = temp_dir / "garmin_streams.csv"
+    garmin_df.to_csv(garmin_path, index=False)
+
+    result = subprocess.run(
+        [sys.executable, str(quick_merge_script)],
+        cwd=temp_dir,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "Base: Wahoo" in result.stdout
+
+    output_files = list(temp_dir.glob("Trening-*.csv"))
+    assert len(output_files) == 1
+
+    merged_df = pd.read_csv(output_files[0])
+    # All Garmin columns should be merged
+    assert "hrv" in merged_df.columns
+    assert "skin_temperature" in merged_df.columns
+    assert "core_temperature" in merged_df.columns
+    # Verify core_temperature data integrity
+    assert merged_df["core_temperature"].tolist() == [37.0, 37.1, 37.2]
 
 
 def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):

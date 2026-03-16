@@ -20,9 +20,6 @@ T = TypeVar("T")
 def find_header_row(
     path: Path, keywords: List[str], max_lines: int = None
 ) -> Optional[int]:
-    # Use default from config if not provided
-    if max_lines is None:
-        max_lines = Config.HEADER_SCAN_MAX_LINES
     """
     Find the row index containing the header by searching for keywords.
 
@@ -37,6 +34,10 @@ def find_header_row(
     Raises:
         FileFormatError: If file cannot be read
     """
+    # Use default from config if not provided
+    if max_lines is None:
+        max_lines = Config.HEADER_SCAN_MAX_LINES
+    
     from .exceptions import FileFormatError
 
     try:
@@ -60,9 +61,6 @@ def read_csvs_parallel(
     read_func: Callable[[Path], pd.DataFrame],
     max_workers: int = None,
 ) -> Dict[Path, pd.DataFrame]:
-    # Use default from config if not provided
-    if max_workers is None:
-        max_workers = Config.DEFAULT_MAX_WORKERS
     """
     Read multiple CSV files in parallel using ThreadPoolExecutor.
 
@@ -76,6 +74,10 @@ def read_csvs_parallel(
     Returns:
         Dictionary mapping path to DataFrame (excludes failed reads)
     """
+    # Use default from config if not provided
+    if max_workers is None:
+        max_workers = Config.DEFAULT_MAX_WORKERS
+    
     if not paths:
         return {}
 
@@ -100,9 +102,6 @@ def read_csvs_parallel(
 
 
 def check_consecutive_nans_optimized(series: pd.Series, threshold: int = None) -> int:
-    # Use default from config if not provided
-    if threshold is None:
-        threshold = Config.DEFAULT_GAP_THRESHOLD
     """
     Find the maximum length of consecutive NaN/empty values.
     OPTIMIZED: Early exit and efficient RLE implementation.
@@ -114,6 +113,10 @@ def check_consecutive_nans_optimized(series: pd.Series, threshold: int = None) -
     Returns:
         Maximum number of consecutive NaN/empty values
     """
+    # Use default from config if not provided
+    if threshold is None:
+        threshold = Config.DEFAULT_GAP_THRESHOLD
+    
     # Fast check for NaN/empty
     is_null = series.isna() | (series == "")
 
@@ -140,9 +143,6 @@ def check_consecutive_nans_optimized(series: pd.Series, threshold: int = None) -
 def process_files_parallel(
     paths: List[Path], process_func: Callable[[Path], T], max_workers: int = None
 ) -> List[T]:
-    # Use default from config if not provided
-    if max_workers is None:
-        max_workers = Config.DEFAULT_MAX_WORKERS
     """
     Process multiple files in parallel.
 
@@ -154,6 +154,10 @@ def process_files_parallel(
     Returns:
         List of results (in arbitrary order)
     """
+    # Use default from config if not provided
+    if max_workers is None:
+        max_workers = Config.DEFAULT_MAX_WORKERS
+    
     if not paths:
         return []
 

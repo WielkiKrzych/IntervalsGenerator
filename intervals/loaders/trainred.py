@@ -160,31 +160,6 @@ class TrainRedLoader(BaseLoader):
             logger.debug(f"Błąd odczytu przy detekcji {filepath.name}: {e}")
 
         return False
-
-        # Content-based check: scan first 60 lines for SmO2 and THb columns
-        # TrainRed files have ~40 lines of metadata before the header row
-        try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                for i, line in enumerate(f):
-                    if i >= 60:
-                        break
-                    line_upper = line.upper()
-                    # Look for SmO2 and THb in the same line (header row)
-                    if 'SMO2' in line_upper and ('THB' in line_upper):
-
-                        return True
-        except (OSError, UnicodeDecodeError) as e:
-            logger.debug(f"Błąd odczytu przy detekcji {filepath.name}: {e}")
-
-        return False
-
-        if not imported:
-            self.ui.print_warning(
-                "Nie znaleziono pliku TrainRed (CSV z kolumnami SmO2 i THb) w folderze Downloads."
-            )
-
-        return imported
-
     def _normalize_to_1hz(self, path: Path) -> Optional[pd.DataFrame]:
         """
         Normalize high-frequency TrainRed data to 1Hz (1 sample per second).

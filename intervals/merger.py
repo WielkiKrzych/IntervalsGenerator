@@ -101,14 +101,20 @@ class DataMerger:
 
         return df_merged
 
-    def _validate_and_trim_head(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _find_complete_rows_mask(self, df: pd.DataFrame) -> pd.Series:
         """
-        Validate start of file for incomplete rows.
-        Shifts data up while keeping time columns intact.
-        """
-        self.ui.print_message("\n✂️  WALIDACJA POCZĄTKU PLIKU (Synchronizacja startu)")
+        Find mask of rows where all values are present (not NaN or empty).
 
-        # OPTIMIZATION: only run on string/object columns to avoid slow regex on floats/ints
+        OPTIMIZATION: Only processes object columns with regex, numeric columns
+        use fast vectorized operations.
+
+        Args:
+            df: DataFrame to check
+
+        Returns:
+            Boolean Series where True = complete row
+        """
+        # Only run regex on string/object columns to avoid slow operations on numeric
         df_check = df.copy()
         obj_cols = df_check.select_dtypes(include=["object"]).columns
         if not obj_cols.empty:
@@ -116,7 +122,16 @@ class DataMerger:
                 r"^\s*$", np.nan, regex=True
             )
 
-        complete_mask = ~df_check.isna().any(axis=1)
+        return df_check.notna().all(axis=1)
+
+    def _validate_and_trim_head(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Validate start of file for incomplete rows.
+        Shifts data up while keeping time columns intact.
+        """
+        self.ui.print_message("\n✂️  WALIDACJA POCZĄTKU PLIKU (Synchronizacja startu)")
+
+        complete_mask = self._find_complete_rows_mask(df)
         complete_indices = np.where(complete_mask)[0]
 
         if len(complete_indices) == 0:
@@ -160,19 +175,12 @@ class DataMerger:
 
         self.ui.print_success("Przesunięto dane. Licznik czasu pozostał bez zmian.")
         return df_new
-
+    
     def _validate_and_trim_tail(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Validate end of file for incomplete rows."""
         self.ui.print_message("\n✂️  WALIDACJA KOŃCÓWKI PLIKU (Synchronizacja długości)")
 
-        # OPTIMIZATION: same as in _validate_and_trim_head
-        df_check = df.copy()
-        obj_cols = df_check.select_dtypes(include=["object"]).columns
-        if not obj_cols.empty:
-            df_check[obj_cols] = df_check[obj_cols].replace(
-                r"^\s*$", np.nan, regex=True
-            )
-
-        complete_mask = df_check.notna().all(axis=1)
+        complete_mask = self._find_complete_rows_mask(df)
         complete_indices = np.where(complete_mask)[0]
         total_rows = len(df)
 

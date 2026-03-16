@@ -211,12 +211,13 @@ class TymewearLoader(BaseLoader):
             df_out = df_out[~(df_out == "").all(axis=1)]
 
             # Save as clean
-            self.fs.write_csv(df_out, out_clean, index=False)
+            output_path = self.source_dir / f"{path.stem}_clean.csv"
+            self.fs.write_csv(df_out, output_path, index=False)
             self.ui.print_success(
-                f"{out_clean.name} (kolumny: {', '.join(self.OUTPUT_COLUMNS)})"
+                f"{output_path.name} (kolumny: {', '.join(self.OUTPUT_COLUMNS)})"
             )
 
-            clean_files.append(out_clean)
+            clean_files.append(output_path)
 
             # Move original to archive
             try:
