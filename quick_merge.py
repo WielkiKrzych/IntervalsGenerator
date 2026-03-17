@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+"""
+MergeCSV - łączenie plików CSV z różnych urządzeń treningowych.
+
+Obsługiwane źródła danych:
+  - Intervals.icu streams CSV (pełne dane aktywności + sensory)
+  - Wahoo ELEMNT CSV (dane bazowe: time, watts, cadence, HR, speed, altitude)
+  - Garmin FIT (pełne dane aktywności z zegarka)
+  - Garmin sensor CSV (hrv, skin_temperature, HeatStrainIndex, core_temperature)
+  - TrainRed CSV (SmO2, THb)
+  - Tymewear CSV (BR, VT, VE)
+  - Wcześniej zmergowany plik (wszystkie dodatkowe kolumny)
+
+Priorytet bazowy: Wahoo > FIT > Intervals.icu > Garmin sensor > merged
+"""
 
 import argparse
 import math
@@ -9,9 +23,15 @@ from typing import List, Optional, Dict, Any
 import pandas as pd
 import numpy as np
 
+
+# --- Column definitions ---
+
 TRAINRED_COLUMNS = ["SmO2", "THb"]
 TYMEWEAR_COLUMNS = ["BR", "VT", "VE"]
-GARMIN_COLUMNS = ["skin_temperature", "HeatStrainIndex", "core_temperature", "hrv"]
+GARMIN_SENSOR_COLUMNS = ["skin_temperature", "HeatStrainIndex", "core_temperature", "hrv"]
+
+# Columns that indicate a full activity stream (vs sensor-only)
+ACTIVITY_INDICATOR_COLUMNS = {"cadence", "watts", "distance", "velocity_smooth"}
 
 TYMEWEAR_MAPPING = {
     "BR": "TymeBreathRate",
@@ -50,12 +70,18 @@ FIT_FIELD_MAPPING = {
     "tyme_minute_volume": "TymeVentilation",
 }
 
+# Key columns for head-trimming validation (ignore always-empty columns like torque)
+HEAD_TRIM_KEY_COLUMNS = ["heartrate", "cadence", "velocity_smooth", "distance"]
+
 SEMICIRCLE_TO_DEGREES = 180.0 / (2 ** 31)
 
+
+# --- Utility functions ---
 
 def find_header_row(
     path: Path, keywords: List[str], max_lines: int = 60
 ) -> Optional[int]:
+    """Find the row index containing all keywords in a CSV file."""
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for i, line in enumerate(f):
@@ -69,7 +95,77 @@ def find_header_row(
     return None
 
 
+def _trim_leading_nan(df: pd.DataFrame, key_columns: List[str], limit: int = 30) -> pd.DataFrame:
+    """
+    Remove leading rows with NaN in KEY columns only.
+
+    Unlike the old approach that checked ALL columns (causing torque/empty
+    columns to trigger removal), this only checks activity-critical columns.
+    """
+    present_keys = [c for c in key_columns if c in df.columns]
+    if not present_keys:
+        return df
+
+    head_n = min(limit, len(df))
+    head_part = df.iloc[:head_n]
+    idx_to_drop = head_part[head_part[present_keys].isna().any(axis=1)].index
+
+    if len(idx_to_drop) > 0:
+        df = df.drop(index=idx_to_drop).reset_index(drop=True)
+        print(f"    -> Usunięto {len(idx_to_drop)} wierszy z początku (NaN w {present_keys})")
+
+    return df
+
+
+def _trim_trailing_incomplete(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Trim trailing rows where key data columns are all NaN.
+
+    Uses a relaxed check: only trims rows where MOST columns are NaN,
+    not rows where a single optional column (like torque) is empty.
+    """
+    if df.empty:
+        return df
+
+    # Count non-NaN values per row; trim rows with < 50% data
+    threshold = max(1, len(df.columns) // 2)
+    non_null_counts = df.notna().sum(axis=1)
+
+    # Find last row with enough data
+    valid_mask = non_null_counts >= threshold
+    valid_positions = np.flatnonzero(valid_mask.values)
+
+    if len(valid_positions) > 0:
+        last_valid = valid_positions[-1]
+        if last_valid < len(df) - 1:
+            trimmed = len(df) - last_valid - 1
+            df = df.iloc[:last_valid + 1].copy()
+            print(f"    Przycięto {trimmed} niepełnych wierszy z końca")
+    else:
+        print("    Uwaga: Brak wierszy z wystarczającymi danymi!")
+
+    return df
+
+
+# --- File type detection ---
+
 def detect_file_type(filepath: Path) -> Optional[str]:
+    """
+    Detect the source type of a CSV file.
+
+    Returns one of: 'intervals', 'wahoo', 'garmin', 'trainred',
+    'tymewear', 'merged', or None.
+
+    Key distinction:
+      - 'intervals': Intervals.icu streams file — has hrv AND activity
+        columns (cadence, watts, distance, velocity_smooth). This is
+        a COMPLETE activity file and should be used as base.
+      - 'garmin': Garmin watch sensor-only file — has hrv but NO
+        activity columns. Only provides supplemental sensor data.
+      - 'wahoo': Wahoo ELEMNT — has secs/watts but no hrv.
+      - 'merged': Previously merged file — has columns from multiple
+        sources (smo2 + heartrate, etc.). Used as additional data.
+    """
     if filepath.suffix.lower() != ".csv":
         return None
 
@@ -85,15 +181,55 @@ def detect_file_type(filepath: Path) -> Optional[str]:
             content = "\n".join(lines).lower()
             first_line = lines[0].lower() if lines else ""
 
-            if filepath.name.endswith("streams.csv") or "secs" in first_line or "time,watts" in first_line:
-                if "hrv" in first_line:
+            # Strip BOM if present
+            first_line = first_line.lstrip("\ufeff")
+
+            header_fields = {f.strip() for f in first_line.split(",")}
+
+            # Check for streams-like files (Intervals.icu, Wahoo, Garmin)
+            # Must have time/secs AND at least one activity indicator OR
+            # be named *streams.csv
+            is_streams = (
+                filepath.name.endswith("streams.csv")
+                or "secs" in header_fields
+                or first_line.startswith("time,watts")
+                or ("time" in header_fields and bool(header_fields & ACTIVITY_INDICATOR_COLUMNS))
+            )
+
+            if is_streams:
+                has_hrv = "hrv" in header_fields
+                has_activity = bool(header_fields & ACTIVITY_INDICATOR_COLUMNS)
+
+                if has_hrv and has_activity:
+                    # Full activity stream from Intervals.icu
+                    # Has both sensor (hrv) and activity (cadence, watts, etc.)
+                    return "intervals"
+                elif has_hrv and not has_activity:
+                    # Garmin watch sensor-only export
                     return "garmin"
-                elif "secs" in first_line or "watts" in first_line or "time,watts" in first_line:
+                elif "secs" in header_fields or "watts" in header_fields:
                     return "wahoo"
 
+            # Previously merged file: has columns from multiple source types
+            # Detect BEFORE individual sensor checks to avoid misclassification
+            source_groups = 0
+            if any(c in header_fields for c in ["smo2", "thb"]):
+                source_groups += 1  # TrainRed data
+            if any(c in header_fields for c in ["skin_temperature", "core_temperature", "heatstrainindex"]):
+                source_groups += 1  # Garmin sensor data
+            if any(c in header_fields for c in ["tymebreathrate", "tymeventilation"]):
+                source_groups += 1  # Tymewear data
+            if any(c in header_fields for c in ["heartrate", "altitude"]):
+                source_groups += 1  # Base activity data
+
+            if source_groups >= 2:
+                return "merged"
+
+            # TrainRed: SmO2 + THb in content (pure sensor file)
             if "smo2" in content and "thb" in content:
                 return "trainred"
 
+            # Tymewear: BR + VT + VE (pure sensor file)
             if all(col.lower() in content for col in ["br", "vt", "ve"]):
                 return "tymewear"
 
@@ -103,9 +239,69 @@ def detect_file_type(filepath: Path) -> Optional[str]:
     return None
 
 
+# --- File processors ---
+
+def process_intervals(filepath: Path) -> pd.DataFrame:
+    """
+    Process an Intervals.icu streams CSV file.
+
+    Keeps ALL columns — this is a complete activity file with all data
+    from Garmin Connect merged by Intervals.icu. Includes cadence,
+    heartrate, distance, velocity_smooth, VerticalOscillation, hrv, etc.
+
+    Only performs:
+      - BOM removal from column names
+      - Leading NaN trimming on key activity columns
+      - Trailing empty row removal
+      - Dropping always-empty columns (e.g., torque if all NaN)
+    """
+    print(f"  [Intervals.icu] Przetwarzanie: {filepath.name}")
+
+    df = pd.read_csv(filepath, encoding="utf-8-sig")
+    df.columns = [str(c).strip() for c in df.columns]
+
+    print(f"    -> {len(df)} wierszy, {len(df.columns)} kolumn: {list(df.columns)}")
+
+    # Drop columns that are completely empty (e.g., torque)
+    empty_cols = [c for c in df.columns if df[c].isna().all()]
+    if empty_cols:
+        df = df.drop(columns=empty_cols)
+        print(f"    -> Usunięto puste kolumny: {empty_cols}")
+
+    # Remove leading rows with NaN in KEY activity columns only
+    df = _trim_leading_nan(df, HEAD_TRIM_KEY_COLUMNS)
+
+    # Remove trailing empty rows
+    df = _trim_trailing_incomplete(df)
+
+    print(f"    -> Wynik: {len(df)} wierszy, {len(df.columns)} kolumn: {list(df.columns)}")
+    return df
+
+
+def process_merged(filepath: Path) -> pd.DataFrame:
+    """
+    Process a previously merged file (e.g., SubT).
+
+    Keeps ALL columns — provides supplemental data not in the base.
+    Duplicate columns are handled during merge (base wins).
+    """
+    print(f"  [Merged] Ładowanie: {filepath.name}")
+
+    df = pd.read_csv(filepath, encoding="utf-8-sig")
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Drop completely empty columns
+    empty_cols = [c for c in df.columns if df[c].isna().all()]
+    if empty_cols:
+        df = df.drop(columns=empty_cols)
+
+    print(f"    -> {len(df)} wierszy, {len(df.columns)} kolumn: {list(df.columns)}")
+    return df
+
+
 def _compute_hrv_per_second(fitfile) -> Dict[int, float]:
     """Compute per-second HRV (RMSSD) from FIT HRV messages."""
-    rr_intervals = []
+    rr_intervals: List[float] = []
     for msg in fitfile.get_messages("hrv"):
         for field in msg.fields:
             if field.name == "time" and field.value is not None:
@@ -126,7 +322,7 @@ def _compute_hrv_per_second(fitfile) -> Dict[int, float]:
             diff_sq = (rr - rr_intervals[i - 1]) ** 2
             hrv_by_second.setdefault(sec, []).append(diff_sq)
 
-    result = {}
+    result: Dict[int, float] = {}
     for sec, diffs in hrv_by_second.items():
         rmssd = math.sqrt(sum(diffs) / len(diffs))
         result[sec] = round(rmssd, 2)
@@ -141,17 +337,17 @@ def process_fit(filepath: Path) -> pd.DataFrame:
         print(f"  [FIT] Error: fitparse not installed. Run: pip3 install fitparse")
         return pd.DataFrame()
 
-    print(f"  [FIT] Processing: {filepath.name}")
+    print(f"  [FIT] Przetwarzanie: {filepath.name}")
 
     fitfile = fitparse.FitFile(str(filepath))
     records = list(fitfile.get_messages("record"))
 
     if not records:
-        print(f"    -> Error: no record messages found")
+        print(f"    -> Error: brak wiadomości record")
         return pd.DataFrame()
 
     # Extract per-record data
-    rows = []
+    rows: List[Dict[str, Any]] = []
     first_timestamp = None
     for record in records:
         row: Dict[str, Any] = {}
@@ -180,7 +376,7 @@ def process_fit(filepath: Path) -> pd.DataFrame:
     df = pd.DataFrame(rows)
 
     if df.empty:
-        print(f"    -> Error: no data extracted")
+        print(f"    -> Error: brak danych")
         return pd.DataFrame()
 
     # Fix running cadence: Garmin stores half-cadence for running
@@ -190,11 +386,11 @@ def process_fit(filepath: Path) -> pd.DataFrame:
     if "fractional_cadence" in df.columns:
         df = df.drop(columns=["fractional_cadence"])
 
-    # Convert speed m/s -> pace-friendly km/h
+    # Convert speed m/s -> km/h
     if "speed_m_s" in df.columns:
         df["velocity_smooth"] = (df["speed_m_s"] * 3.6).round(3)
 
-    # Convert vertical oscillation from mm to cm for readability
+    # Convert vertical oscillation from mm to cm
     if "VerticalOscillation" in df.columns:
         df["VerticalOscillation"] = (df["VerticalOscillation"] / 10.0).round(1)
 
@@ -207,7 +403,7 @@ def process_fit(filepath: Path) -> pd.DataFrame:
     if hrv_data:
         elapsed_secs = df["_elapsed_sec"].astype(int) if "_elapsed_sec" in df.columns else pd.Series(range(len(df)))
         df["hrv"] = elapsed_secs.map(hrv_data)
-        print(f"    -> HRV data: {len(hrv_data)} seconds with RMSSD values")
+        print(f"    -> HRV: {len(hrv_data)} sekund z RMSSD")
 
     # Create time column (elapsed seconds) and drop internal column
     if "_elapsed_sec" in df.columns:
@@ -215,41 +411,36 @@ def process_fit(filepath: Path) -> pd.DataFrame:
         df = df.drop(columns=["_elapsed_sec"])
 
     # Remove leading rows with NaN in key columns
-    head_n = min(30, len(df))
-    head_part = df.iloc[:head_n]
-    key_cols = [c for c in ["heartrate", "cadence", "speed_m_s"] if c in df.columns]
-    if key_cols:
-        idx_to_drop = head_part[head_part[key_cols].isna().any(axis=1)].index
-        if len(idx_to_drop) > 0:
-            df = df.drop(index=idx_to_drop).reset_index(drop=True)
-            print(f"    -> Removed {len(idx_to_drop)} rows from start (NaN)")
+    df = _trim_leading_nan(df, HEAD_TRIM_KEY_COLUMNS)
 
-    print(f"    -> {len(df)} rows, {len(df.columns)} columns: {list(df.columns)}")
+    print(f"    -> {len(df)} wierszy, {len(df.columns)} kolumn: {list(df.columns)}")
     return df
 
 
 def process_wahoo(filepath: Path) -> pd.DataFrame:
-    print(f"  [Wahoo] Loading: {filepath.name}")
+    """Load a Wahoo ELEMNT CSV file (used as-is as base)."""
+    print(f"  [Wahoo] Ładowanie: {filepath.name}")
     df = pd.read_csv(filepath)
-    print(f"    -> {len(df)} rows, {len(df.columns)} columns")
+    print(f"    -> {len(df)} wierszy, {len(df.columns)} kolumn")
     return df
 
 
 def process_trainred(filepath: Path) -> pd.DataFrame:
-    print(f"  [TrainRed] Processing: {filepath.name}")
+    """Process a TrainRed CSV file, extracting SmO2 and THb columns."""
+    print(f"  [TrainRed] Przetwarzanie: {filepath.name}")
 
     header_idx = find_header_row(filepath, ["Timestamp", "SmO2"]) or find_header_row(
         filepath, ["SmO2", "THb"]
     )
     if header_idx is None:
-        print(f"    -> Error: header not found")
+        print(f"    -> Error: nie znaleziono nagłówka")
         return pd.DataFrame()
 
     df = pd.read_csv(filepath, skiprows=header_idx, engine="python")
 
     timestamp_col = next((c for c in df.columns if "timestamp" in str(c).lower()), None)
     if timestamp_col is None:
-        print(f"    -> Error: Timestamp column missing")
+        print(f"    -> Error: brak kolumny Timestamp")
         return pd.DataFrame()
 
     df["_ts_float"] = pd.to_numeric(
@@ -261,14 +452,14 @@ def process_trainred(filepath: Path) -> pd.DataFrame:
 
     samples_per_sec = df.groupby("second").size().median()
     if samples_per_sec > 1:
-        print(f"    -> Normalizing {samples_per_sec:.0f}Hz -> 1Hz")
+        print(f"    -> Normalizacja {samples_per_sec:.0f}Hz -> 1Hz")
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         numeric_cols = [c for c in numeric_cols if c not in ["second", "_ts_float"]]
         df_agg = df.groupby("second")[numeric_cols].mean().reset_index()
     else:
         df_agg = df
 
-    result_cols = {}
+    result_cols: Dict[str, pd.Series] = {}
     for col in df_agg.columns:
         col_lower = str(col).lower()
         if "smo2" in col_lower:
@@ -277,20 +468,21 @@ def process_trainred(filepath: Path) -> pd.DataFrame:
             result_cols["THb"] = df_agg[col]
 
     if not result_cols:
-        print(f"    -> Error: SmO2/THb columns missing")
+        print(f"    -> Error: brak kolumn SmO2/THb")
         return pd.DataFrame()
 
     df_out = pd.DataFrame(result_cols)
-    print(f"    -> {len(df_out)} rows, columns: {list(df_out.columns)}")
+    print(f"    -> {len(df_out)} wierszy, kolumny: {list(df_out.columns)}")
     return df_out
 
 
 def process_tymewear(filepath: Path) -> pd.DataFrame:
-    print(f"  [Tymewear] Processing: {filepath.name}")
+    """Process a Tymewear CSV file, extracting BR/VT/VE columns."""
+    print(f"  [Tymewear] Przetwarzanie: {filepath.name}")
 
     header_idx = find_header_row(filepath, ["BR", "VT", "VE"])
     if header_idx is None:
-        print(f"    -> Error: header not found")
+        print(f"    -> Error: nie znaleziono nagłówka")
         return pd.DataFrame()
 
     df = pd.read_csv(filepath, skiprows=header_idx)
@@ -298,7 +490,7 @@ def process_tymewear(filepath: Path) -> pd.DataFrame:
 
     missing = [c for c in TYMEWEAR_COLUMNS if c not in df.columns]
     if missing:
-        print(f"    -> Error: missing columns {missing}")
+        print(f"    -> Error: brakujące kolumny {missing}")
         return pd.DataFrame()
 
     df_out = df[TYMEWEAR_COLUMNS].copy()
@@ -308,50 +500,48 @@ def process_tymewear(filepath: Path) -> pd.DataFrame:
         df_out[col] = pd.to_numeric(df_out[col], errors="coerce")
     df_out = df_out.dropna(how="all")
 
-    print(f"    -> {len(df_out)} rows, columns: {list(df_out.columns)}")
+    print(f"    -> {len(df_out)} wierszy, kolumny: {list(df_out.columns)}")
     return df_out
 
 
-def process_garmin(filepath: Path, include_secs: bool = True, keep_all_columns: bool = False) -> pd.DataFrame:
-    print(f"  [Garmin] Processing: {filepath.name}")
+def process_garmin_sensor(filepath: Path) -> pd.DataFrame:
+    """
+    Process a Garmin watch sensor-only CSV file.
 
-    df = pd.read_csv(filepath)
+    Extracts only sensor columns: skin_temperature, HeatStrainIndex,
+    core_temperature, hrv. Does NOT contain activity data.
+    """
+    print(f"  [Garmin sensor] Przetwarzanie: {filepath.name}")
+
+    df = pd.read_csv(filepath, encoding="utf-8-sig")
     df.columns = [str(c).strip() for c in df.columns]
 
-    present = [c for c in GARMIN_COLUMNS if c in df.columns]
+    present = [c for c in GARMIN_SENSOR_COLUMNS if c in df.columns]
     if not present:
-        print(f"    -> Error: missing columns {GARMIN_COLUMNS}")
+        print(f"    -> Error: brak kolumn sensorowych {GARMIN_SENSOR_COLUMNS}")
         return pd.DataFrame()
 
-    if keep_all_columns:
-        # When Garmin is the base, keep ALL columns from the original file
-        # This preserves watts, cadence, heartrate, etc.
-        df_out = df.copy()
-    else:
-        # When Garmin is an additional file, keep only GARMIN_COLUMNS
-        cols_to_keep = present.copy()
-        if include_secs and "secs" in df.columns and "secs" not in cols_to_keep:
-            cols_to_keep.insert(0, "secs")
-        df_out = df[cols_to_keep].copy()
-
+    df_out = df[present].copy()
     df_out = df_out.replace(r"^\s*$", np.nan, regex=True)
 
-    head_n = min(30, len(df_out))
-    head_part = df_out.iloc[:head_n]
-    idx_to_drop = head_part[head_part.isna().any(axis=1)].index
+    # Trim leading NaN rows (sensor warm-up period)
+    df_out = _trim_leading_nan(df_out, present)
 
-    if len(idx_to_drop) > 0:
-        df_out = df_out.drop(index=idx_to_drop)
-        print(f"    -> Removed {len(idx_to_drop)} rows from start (NaN)")
-
-    df_out = df_out.reset_index(drop=True)
-    print(f"    -> {len(df_out)} rows, columns: {list(df_out.columns)}")
+    print(f"    -> {len(df_out)} wierszy, kolumny: {list(df_out.columns)}")
     return df_out
 
+
+# --- Merge logic ---
 
 def merge_dataframes(
     base_df: pd.DataFrame, other_dfs: List[pd.DataFrame]
 ) -> pd.DataFrame:
+    """
+    Merge base DataFrame with additional DataFrames by column concatenation.
+
+    Duplicate columns are dropped (base version wins).
+    Trailing incomplete rows are trimmed using relaxed threshold.
+    """
     if base_df.empty:
         return pd.DataFrame()
 
@@ -365,6 +555,7 @@ def merge_dataframes(
         df_reset = df.reset_index(drop=True)
         duplicates = [col for col in df_reset.columns if col in seen_columns]
         if duplicates:
+            print(f"    -> Pomijam duplikaty kolumn: {duplicates}")
             df_reset = df_reset.drop(columns=duplicates)
 
         if df_reset.empty or len(df_reset.columns) == 0:
@@ -373,37 +564,36 @@ def merge_dataframes(
         all_dfs.append(df_reset)
         seen_columns.update(df_reset.columns)
 
-    print(f"\n  Merging {len(all_dfs)} DataFrames...")
+    print(f"\n  Łączenie {len(all_dfs)} DataFrame'ów...")
     df_merged = pd.concat(all_dfs, axis=1)
 
-    mask = df_merged.notna().all(axis=1)
-    valid_positions = np.flatnonzero(mask)
+    # Trim trailing rows using relaxed threshold
+    df_merged = _trim_trailing_incomplete(df_merged)
 
-    if len(valid_positions) > 0:
-        last_valid_pos = valid_positions[-1]
-        df_merged = df_merged.iloc[: last_valid_pos + 1].copy()
-        print(f"    Trimmed to last complete row: {len(df_merged)} rows")
-    else:
-        print("    Warning: No rows are fully complete!")
-
+    print(f"    Wynik łączenia: {len(df_merged)} wierszy, {len(df_merged.columns)} kolumn")
     return df_merged
 
 
+# --- File discovery ---
+
 def find_input_files(directory: Path) -> List[Path]:
+    """Find all CSV and FIT files in a directory."""
     csv_files = list(directory.glob("*.csv"))
     fit_files = list(directory.glob("*.fit")) + list(directory.glob("*.FIT"))
     return sorted(set(csv_files + fit_files))
 
 
+# --- Main entry point ---
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Prosty skrypt do laczenia plikow CSV z urzadzen treningowych.",
+        description="MergeCSV - łączenie plików CSV z urządzeń treningowych.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument("files", nargs="*", type=Path, help="CSV/FIT files to merge")
-    parser.add_argument("--output", "-o", type=Path, help="Output file path")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("files", nargs="*", type=Path, help="Pliki CSV/FIT do połączenia")
+    parser.add_argument("--output", "-o", type=Path, help="Ścieżka pliku wyjściowego")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Szczegółowy output")
 
     args = parser.parse_args()
 
@@ -416,21 +606,23 @@ def main():
     )
 
     if not input_files:
-        print("Error: No CSV/FIT files found!")
+        print("Error: Nie znaleziono plików CSV/FIT!")
         return 1
 
-    print(f"\nFound {len(input_files)} input files")
+    print(f"\nZnaleziono {len(input_files)} plików wejściowych")
 
-    files_by_type = {
+    files_by_type: Dict[str, List[Path]] = {
         "wahoo": [],
+        "intervals": [],
         "garmin": [],
         "trainred": [],
         "tymewear": [],
+        "merged": [],
         "fit": [],
         "unknown": [],
     }
 
-    print("\nFile type detection:")
+    print("\nDetekcja typów plików:")
     for f in input_files:
         if f.suffix.lower() == ".fit":
             files_by_type["fit"].append(f)
@@ -442,41 +634,66 @@ def main():
                 print(f"  {f.name} -> {ftype.upper()}")
             else:
                 files_by_type["unknown"].append(f)
+                print(f"  {f.name} -> NIEROZPOZNANY (pomijam)")
 
-    # Determine base file priority: Wahoo CSV > FIT > Garmin CSV
+    # Determine base file priority: Wahoo > FIT > Intervals.icu > Garmin sensor > merged
     base_file = None
     base_type = None
 
     if files_by_type["wahoo"]:
         base_file = files_by_type["wahoo"][0]
         base_type = "wahoo"
-        print(f"\nBase: Wahoo ({base_file.name})")
+        print(f"\nBaza: Wahoo ({base_file.name})")
     elif files_by_type["fit"]:
         base_file = files_by_type["fit"][0]
         base_type = "fit"
-        print(f"\nBase: FIT ({base_file.name})")
+        print(f"\nBaza: FIT ({base_file.name})")
+    elif files_by_type["intervals"]:
+        base_file = files_by_type["intervals"][0]
+        base_type = "intervals"
+        print(f"\nBaza: Intervals.icu ({base_file.name})")
     elif files_by_type["garmin"]:
         base_file = files_by_type["garmin"][0]
         base_type = "garmin"
-        print(f"\nBase: Garmin ({base_file.name}) - no Wahoo/FIT found")
+        print(f"\nBaza: Garmin sensor ({base_file.name}) - brak lepszego źródła")
+    elif files_by_type["merged"]:
+        base_file = files_by_type["merged"][0]
+        base_type = "merged"
+        print(f"\nBaza: Wcześniej zmergowany plik ({base_file.name})")
 
     if not base_file:
-        print("\nError: No base file found (Wahoo, FIT, or Garmin required)!")
+        print("\nError: Nie znaleziono pliku bazowego!")
+        print("Potrzebny jest co najmniej jeden plik: Wahoo, FIT, Intervals.icu streams, lub Garmin.")
         return 1
 
-    print("\n" + "=" * 60 + "\nPROCESSING FILES\n" + "=" * 60)
+    print("\n" + "=" * 60 + "\nPRZETWARZANIE PLIKÓW\n" + "=" * 60)
 
+    # Process base file
     if base_type == "wahoo":
         base_df = process_wahoo(base_file)
     elif base_type == "fit":
         base_df = process_fit(base_file)
+    elif base_type == "intervals":
+        base_df = process_intervals(base_file)
+    elif base_type == "garmin":
+        # Garmin sensor as base — read ALL columns (fallback scenario)
+        base_df = pd.read_csv(base_file, encoding="utf-8-sig")
+        base_df.columns = [str(c).strip() for c in base_df.columns]
+        empty_cols = [c for c in base_df.columns if base_df[c].isna().all()]
+        if empty_cols:
+            base_df = base_df.drop(columns=empty_cols)
+        base_df = _trim_leading_nan(base_df, HEAD_TRIM_KEY_COLUMNS)
+        print(f"  [Garmin base] {len(base_df)} wierszy, {len(base_df.columns)} kolumn")
+    elif base_type == "merged":
+        base_df = process_merged(base_file)
     else:
-        base_df = process_garmin(base_file, keep_all_columns=True)
+        base_df = pd.DataFrame()
 
     if base_df.empty:
+        print("\nError: Plik bazowy jest pusty!")
         return 1
 
-    # Merge additional wahoo files into the base (fills missing columns like heartrate)
+    # Merge additional Wahoo files (if Wahoo is base and there are extras)
     if base_type == "wahoo" and len(files_by_type["wahoo"]) > 1:
         for f in files_by_type["wahoo"][1:]:
             extra_df = process_wahoo(f)
@@ -484,26 +701,40 @@ def main():
                 continue
             new_cols = [c for c in extra_df.columns if c not in base_df.columns]
             if new_cols:
-                print(f"    -> Adding columns from {f.name}: {new_cols}")
+                print(f"    -> Dodaję kolumny z {f.name}: {new_cols}")
                 extra_reset = extra_df[new_cols].reset_index(drop=True)
                 base_df = pd.concat([base_df.reset_index(drop=True), extra_reset], axis=1)
 
-    other_dfs = []
+    # Process all additional files
+    other_dfs: List[pd.DataFrame] = []
+
+    # Intervals.icu files (if not base)
+    if base_type != "intervals":
+        for f in files_by_type["intervals"]:
+            df = process_intervals(f)
+            if not df.empty:
+                other_dfs.append(df)
+
+    # TrainRed
     for f in files_by_type["trainred"]:
         df = process_trainred(f)
         if not df.empty:
             other_dfs.append(df)
+
+    # Tymewear
     for f in files_by_type["tymewear"]:
         df = process_tymewear(f)
         if not df.empty:
             other_dfs.append(df)
-    # Process Garmin CSV files only if they're not the base
+
+    # Garmin sensor (if not base)
     if base_type != "garmin":
         for f in files_by_type["garmin"]:
-            df = process_garmin(f, include_secs=False)
+            df = process_garmin_sensor(f)
             if not df.empty:
                 other_dfs.append(df)
-    # Process additional FIT files (not the base)
+
+    # FIT files (if not base)
     if base_type == "fit" and len(files_by_type["fit"]) > 1:
         for f in files_by_type["fit"][1:]:
             df = process_fit(f)
@@ -515,20 +746,29 @@ def main():
             if not df.empty:
                 other_dfs.append(df)
 
-    print("\n" + "=" * 60 + "\nMERGING DATA\n" + "=" * 60)
+    # Previously merged files (if not base)
+    if base_type != "merged":
+        for f in files_by_type["merged"]:
+            df = process_merged(f)
+            if not df.empty:
+                other_dfs.append(df)
+
+    print("\n" + "=" * 60 + "\nŁĄCZENIE DANYCH\n" + "=" * 60)
     df_merged = merge_dataframes(base_df, other_dfs)
 
     if df_merged.empty:
+        print("\nError: Wynik łączenia jest pusty!")
         return 1
 
-    # Normalize time column to start at 0 (required by Intervals.icu)
+    # Normalize time column to start at 0
     for time_col in ("time", "secs"):
         if time_col in df_merged.columns:
             first_val = df_merged[time_col].iloc[0]
             if pd.notna(first_val) and first_val != 0:
                 df_merged[time_col] = df_merged[time_col] - first_val
-                print(f"  Adjusted '{time_col}' to start at 0 (was {first_val})")
+                print(f"  Znormalizowano '{time_col}' do startu od 0 (było {first_val})")
 
+    # Determine output path
     if args.output:
         output_path = args.output
     else:
@@ -543,12 +783,13 @@ def main():
             output_dir = Path.cwd()
 
         output_path = output_dir / output_filename
+
     df_merged.to_csv(output_path, index=False)
 
-    print("\n" + "=" * 60 + "\nRESULT\n" + "=" * 60)
-    print(
-        f"  File: {output_path}\n  Rows: {len(df_merged)}\n  Cols: {len(df_merged.columns)}"
-    )
+    print("\n" + "=" * 60 + "\nWYNIK\n" + "=" * 60)
+    print(f"  Plik: {output_path}")
+    print(f"  Wiersze: {len(df_merged)}")
+    print(f"  Kolumny ({len(df_merged.columns)}): {list(df_merged.columns)}")
 
     return 0
 

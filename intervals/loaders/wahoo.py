@@ -173,13 +173,17 @@ class WahooLoader(BaseLoader):
 
     def detect_in_downloads(self, filepath: Path) -> bool:
         """
-        Check if file is a Wahoo streams.csv (NOT Garmin).
+        Check if file is a Wahoo streams.csv.
+
+        Wahoo files have 'secs' or 'watts' but NOT 'hrv'.
+        Files with 'hrv' are Garmin/Intervals.icu and handled
+        by GarminLoader.
         """
         if not filepath.name.endswith("streams.csv"):
             return False
 
         try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(filepath, "r", encoding="utf-8-sig", errors="ignore") as f:
                 first_line = f.readline().lower()
                 if "hrv" in first_line:
                     return False
