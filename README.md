@@ -66,6 +66,10 @@ Pliki sa automatycznie rozpoznawane na podstawie naglowkow CSV:
 
 **Wynik:** Jeden plik `Trening-DD.MM.YYYY-import.csv` zsynchronizowany czasowo, gotowy do importu w Intervals.icu lub analizy w Analiza Biegowa.
 
+### Automatyczne przycinanie niekompletnych wierszy
+
+Po scaleniu plik jest automatycznie przycinany od konca — usuwane sa wszystkie wiersze, w ktorych **jakakolwiek** kolumna nie ma wartosci. Zapobiega to sytuacji, gdy np. TrainRed (SmO2/THb) ma wiecej probek niz baza (Wahoo/Garmin/Intervals.icu), co skutkowaloby pustymi wierszami na koncu pliku wynikowego.
+
 ### Obsluga plikow FIT
 
 Pliki `.fit` z zegarkow/komputerow Garmin sa parsowane bezposrednio (wymaga `fitparse`). Wyodrebniane dane:
