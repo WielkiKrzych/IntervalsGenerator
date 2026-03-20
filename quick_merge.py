@@ -119,30 +119,35 @@ def _trim_leading_nan(df: pd.DataFrame, key_columns: List[str], limit: int = 30)
 
 def _trim_trailing_incomplete(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Trim trailing rows where key data columns are all NaN.
+    Trim trailing rows that don't have ALL values filled.
 
-    Uses a relaxed check: only trims rows where MOST columns are NaN,
-    not rows where a single optional column (like torque) is empty.
+    Strict check: removes all consecutive rows from the end where ANY
+    column has NaN/empty value. Prevents situations like 3000 rows of
+    time/power/cadence but 3020 rows of SmO2/THb.
     """
     if df.empty:
         return df
 
-    # Count non-NaN values per row; trim rows with < 50% data
-    threshold = max(1, len(df.columns) // 2)
-    non_null_counts = df.notna().sum(axis=1)
+    # Replace whitespace-only strings with NaN for consistent checking
+    df_check = df.copy()
+    obj_cols = df_check.select_dtypes(include=["object"]).columns
+    if not obj_cols.empty:
+        df_check[obj_cols] = df_check[obj_cols].replace(
+            r"^\s*$", np.nan, regex=True
+        )
 
-    # Find last row with enough data
-    valid_mask = non_null_counts >= threshold
-    valid_positions = np.flatnonzero(valid_mask.values)
+    # Find rows where ALL columns have values (strict)
+    complete_mask = df_check.notna().all(axis=1)
+    valid_positions = np.flatnonzero(complete_mask.values)
 
     if len(valid_positions) > 0:
         last_valid = valid_positions[-1]
         if last_valid < len(df) - 1:
             trimmed = len(df) - last_valid - 1
             df = df.iloc[:last_valid + 1].copy()
-            print(f"    Przycięto {trimmed} niepełnych wierszy z końca")
+            print(f"    Przycięto {trimmed} niepełnych wierszy z końca (brak wszystkich wartości)")
     else:
-        print("    Uwaga: Brak wierszy z wystarczającymi danymi!")
+        print("    Uwaga: Brak wierszy z kompletnymi danymi we wszystkich kolumnach!")
 
     return df
 
@@ -540,7 +545,7 @@ def merge_dataframes(
     Merge base DataFrame with additional DataFrames by column concatenation.
 
     Duplicate columns are dropped (base version wins).
-    Trailing incomplete rows are trimmed using relaxed threshold.
+    Trailing incomplete rows are trimmed (strict: all columns must have values).
     """
     if base_df.empty:
         return pd.DataFrame()
@@ -567,7 +572,7 @@ def merge_dataframes(
     print(f"\n  Łączenie {len(all_dfs)} DataFrame'ów...")
     df_merged = pd.concat(all_dfs, axis=1)
 
-    # Trim trailing rows using relaxed threshold
+    # Trim trailing rows (strict: all columns must have values)
     df_merged = _trim_trailing_incomplete(df_merged)
 
     print(f"    Wynik łączenia: {len(df_merged)} wierszy, {len(df_merged.columns)} kolumn")
