@@ -167,12 +167,11 @@ def test_quick_merge_wahoo_with_garmin_core_temp(quick_merge_script, temp_dir):
 
 
 def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):
-    """Test that rows with mostly NaN at the end are trimmed.
+    """Test that trailing rows with ANY NaN are trimmed (strict).
 
-    Trimming uses a relaxed >=50% non-null threshold: rows where the
-    majority of columns are NaN get trimmed. Rows where base activity
-    data (secs, watts) is present but some optional sensor columns are
-    missing are preserved — that's real training data.
+    merge_dataframes() now calls _trim_trailing_incomplete which strips
+    trailing rows where ANY column has NaN. After merge, rows 3-4 have
+    NaN in secs/watts (base was only 3 rows) — they get trimmed.
     """
     # Create a short Wahoo file (only 3 rows)
     wahoo_df = pd.DataFrame({"secs": range(3), "watts": [100, 110, 120]})
@@ -181,7 +180,7 @@ def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):
 
     # Garmin sensor file with 5 rows (2 extra rows beyond Wahoo)
     # After merge, rows 3-4 will have secs=NaN, watts=NaN but hrv filled
-    # → most columns NaN → should be trimmed
+    # → strict trimming removes these trailing incomplete rows
     garmin_df = pd.DataFrame({
         "hrv": [800, 800, 800, 800, 800],
         "skin_temperature": [32.0, 32.0, 32.0, 32.0, 32.0],
@@ -201,10 +200,8 @@ def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):
     output_files = list(temp_dir.glob("Trening-*.csv"))
     merged_df = pd.read_csv(output_files[0])
 
-    # Rows 3-4 have 3/5 columns filled (60%) → still above 50% threshold
-    # But secs and watts are NaN → trimming depends on threshold
-    # With 5 columns and threshold = 2, rows with 3 non-null survive
-    # So all 5 rows remain (Garmin fills 3 cols, base fills 2 for first 3)
-    assert len(merged_df) == 5
-    # First 3 rows should be complete
-    assert merged_df.iloc[:3].notna().all().all()
+    # Strict trim: rows 3-4 have NaN in secs/watts → trimmed
+    # Only the first 3 rows (where ALL columns have values) survive
+    assert len(merged_df) == 3
+    # All remaining rows should be complete (no NaN anywhere)
+    assert merged_df.notna().all().all()

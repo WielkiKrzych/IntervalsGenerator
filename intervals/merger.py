@@ -36,6 +36,12 @@ class DataMerger:
     ) -> pd.DataFrame:
         """
         Merge all clean files into the base DataFrame.
+
+        TrainRed SmO2/THb data has priority: if a TrainRed file (identified by
+        having both smo2 and THb columns with very few total columns) is present,
+        those columns are stripped from the base and from non-TrainRed sources
+        before merging.
+
         OPTIMIZED: Batch concat instead of N sequential concats.
 
         Args:
@@ -50,6 +56,27 @@ class DataMerger:
         self.ui.print_message(f"\n🔗 MERGING WSZYSTKICH DANYCH (Baza: Wahoo.csv)")
         self.ui.print_separator()
 
+        # Phase 1: Detect TrainRed among clean files (header-only scan)
+        has_trainred = False
+        for clean_path in clean_files:
+            try:
+                header = self.fs.read_csv(clean_path, nrows=0)
+                cols_lower = {c.lower() for c in header.columns}
+                if {'smo2', 'thb'}.issubset(cols_lower) and len(header.columns) <= 5:
+                    has_trainred = True
+                    break
+            except Exception:
+                continue
+
+        # Strip priority columns from base if TrainRed is present
+        if has_trainred:
+            cols_to_drop = [c for c in base_df.columns if c.lower() in {'smo2', 'thb'}]
+            if cols_to_drop:
+                self.ui.print_message(
+                    f"      🥇 Priorytet TrainRed: usuwam {cols_to_drop} z bazy"
+                )
+                base_df = base_df.drop(columns=cols_to_drop)
+
         # OPTIMIZATION: Batch concat - collect all DataFrames first, then concat once
         # Instead of O(f*n) for f files and n rows, we get O(n)
         all_dfs = [base_df.reset_index(drop=True)]
@@ -59,6 +86,18 @@ class DataMerger:
             try:
                 df_new = self.fs.read_csv(clean_path)
                 new_reset = df_new.reset_index(drop=True)
+
+                # Strip priority columns from non-TrainRed files
+                if has_trainred:
+                    cols_lower = {c.lower() for c in new_reset.columns}
+                    is_trainred = {'smo2', 'thb'}.issubset(cols_lower) and len(new_reset.columns) <= 5
+                    if not is_trainred:
+                        cols_to_drop = [c for c in new_reset.columns if c.lower() in {'smo2', 'thb'}]
+                        if cols_to_drop:
+                            self.ui.print_message(
+                                f"      🥇 Priorytet TrainRed: usuwam {cols_to_drop} z {clean_path.name}"
+                            )
+                            new_reset = new_reset.drop(columns=cols_to_drop)
 
                 # Find and remove duplicate columns (keep base)
                 duplicates = [col for col in new_reset.columns if col in seen_columns]

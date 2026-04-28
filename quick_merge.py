@@ -481,16 +481,56 @@ def process_trainred(filepath: Path) -> pd.DataFrame:
     return df_out
 
 
+def _find_tymewear_data_header(path: Path, max_lines: int = 60) -> Optional[int]:
+    """
+    Find the Tymewear data header row — must start with 'Time' and contain BR, VT, VE.
+
+    This distinguishes the actual data header (e.g. 'Time,BR,VT,VE,...' with 34 columns)
+    from summary tables that also contain BR/VT/VE keywords but have fewer columns.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for i, line in enumerate(f):
+                if i >= max_lines:
+                    break
+                cols = [c.strip().lower() for c in line.split(",")]
+                if len(cols) >= 4 and cols[0] == "time" and all(
+                    k.lower() in cols for k in ["br", "vt", "ve"]
+                ):
+                    return i
+    except (OSError, UnicodeDecodeError):
+        pass
+    return None
+
+
 def process_tymewear(filepath: Path) -> pd.DataFrame:
     """Process a Tymewear CSV file, extracting BR/VT/VE columns."""
     print(f"  [Tymewear] Przetwarzanie: {filepath.name}")
 
-    header_idx = find_header_row(filepath, ["BR", "VT", "VE"])
+    header_idx = _find_tymewear_data_header(filepath)
+    if header_idx is None:
+        # Fallback to simple keyword search
+        header_idx = find_header_row(filepath, ["BR", "VT", "VE"])
     if header_idx is None:
         print(f"    -> Error: nie znaleziono nagłówka")
         return pd.DataFrame()
 
-    df = pd.read_csv(filepath, skiprows=header_idx)
+    # Read header row to check if next row is units (non-numeric)
+    skip_rows = list(range(header_idx))
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+        if header_idx + 1 < len(lines):
+            next_line = lines[header_idx + 1]
+            first_val = next_line.split(",")[0].strip()
+            # If the row after header contains unit labels (e.g. "sec", "br/min"),
+            # skip it — it's not data
+            if first_val and not first_val.replace(".", "").replace("-", "").isdigit():
+                skip_rows.append(header_idx + 1)
+    except (OSError, UnicodeDecodeError):
+        pass
+
+    df = pd.read_csv(filepath, skiprows=skip_rows)
     df.columns = [str(c).strip() for c in df.columns]
 
     missing = [c for c in TYMEWEAR_COLUMNS if c not in df.columns]
@@ -544,11 +584,36 @@ def merge_dataframes(
     """
     Merge base DataFrame with additional DataFrames by column concatenation.
 
-    Duplicate columns are dropped (base version wins).
+    TrainRed SmO2/THb data has priority: if TrainRed is present among other_dfs,
+    those columns are stripped from the base and from non-TrainRed sources before merge.
+    Duplicate columns are dropped (base version wins for non-priority columns).
     Trailing incomplete rows are trimmed (strict: all columns must have values).
     """
     if base_df.empty:
         return pd.DataFrame()
+
+    # TrainRed priority columns (case-insensitive)
+    _priority_lower = {'smo2', 'thb'}
+    _non_priority_max_cols = 5
+
+    def _is_trainred(df):
+        cols_lower = {c.lower() for c in df.columns}
+        return _priority_lower.issubset(cols_lower) and len(df.columns) <= _non_priority_max_cols
+
+    def _strip_priority(df):
+        cols = [c for c in df.columns if c.lower() in _priority_lower]
+        return df.drop(columns=cols) if cols else df
+
+    # Detect TrainRed among non-base DataFrames
+    has_trainred = any(_is_trainred(df) for df in other_dfs if not df.empty)
+
+    # If TrainRed is available, strip priority columns from base
+    if has_trainred:
+        stripped = _strip_priority(base_df)
+        if len(stripped.columns) < len(base_df.columns):
+            dropped = set(base_df.columns) - set(stripped.columns)
+            print(f"    -> Priorytet TrainRed: usuwam {dropped} z bazy")
+        base_df = stripped
 
     all_dfs = [base_df.reset_index(drop=True)]
     seen_columns = set(base_df.columns)
@@ -558,6 +623,15 @@ def merge_dataframes(
             continue
 
         df_reset = df.reset_index(drop=True)
+
+        # Strip priority cols from non-TrainRed sources
+        if has_trainred and not _is_trainred(df_reset):
+            stripped = _strip_priority(df_reset)
+            if len(stripped.columns) < len(df_reset.columns):
+                dropped = set(df_reset.columns) - set(stripped.columns)
+                print(f"    -> Priorytet TrainRed: usuwam {dropped} z innych źródeł")
+            df_reset = stripped
+
         duplicates = [col for col in df_reset.columns if col in seen_columns]
         if duplicates:
             print(f"    -> Pomijam duplikaty kolumn: {duplicates}")
