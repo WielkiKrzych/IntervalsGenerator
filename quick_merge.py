@@ -117,7 +117,7 @@ def _trim_leading_nan(df: pd.DataFrame, key_columns: List[str], limit: int = 30)
     return df
 
 
-def _trim_trailing_incomplete(df: pd.DataFrame) -> pd.DataFrame:
+def _trim_trailing_incomplete(df: pd.DataFrame, anchor_columns: Optional[list[str]] = None) -> pd.DataFrame:
     """
     Trim trailing rows that don't have ALL values filled.
 
@@ -137,7 +137,14 @@ def _trim_trailing_incomplete(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # Find rows where ALL columns have values (strict)
-    complete_mask = df_check.notna().all(axis=1)
+    if anchor_columns is not None:
+        valid_cols = [c for c in anchor_columns if c in df_check.columns]
+        if valid_cols:
+            complete_mask = df_check[valid_cols].notna().all(axis=1)
+        else:
+            complete_mask = df_check.notna().all(axis=1)
+    else:
+        complete_mask = df_check.notna().all(axis=1)
     valid_positions = np.flatnonzero(complete_mask.values)
 
     if len(valid_positions) > 0:
@@ -145,9 +152,9 @@ def _trim_trailing_incomplete(df: pd.DataFrame) -> pd.DataFrame:
         if last_valid < len(df) - 1:
             trimmed = len(df) - last_valid - 1
             df = df.iloc[:last_valid + 1].copy()
-            print(f"    Przycięto {trimmed} niepełnych wierszy z końca (brak wszystkich wartości)")
+            print(f"    Przycięto {trimmed} niepełnych wierszy z końca (brak wartości w kolumnach bazowych)" if anchor_columns is not None else f"    Przycięto {trimmed} niepełnych wierszy z końca (brak wszystkich wartości)")
     else:
-        print("    Uwaga: Brak wierszy z kompletnymi danymi we wszystkich kolumnach!")
+        print("    Uwaga: Brak wierszy z kompletnymi danymi w kolumnach bazowych!" if anchor_columns is not None else "    Uwaga: Brak wierszy z kompletnymi danymi we wszystkich kolumnach!")
 
     return df
 
@@ -647,7 +654,7 @@ def merge_dataframes(
     df_merged = pd.concat(all_dfs, axis=1)
 
     # Trim trailing rows (strict: all columns must have values)
-    df_merged = _trim_trailing_incomplete(df_merged)
+    df_merged = _trim_trailing_incomplete(df_merged, anchor_columns=list(base_df.columns))
 
     print(f"    Wynik łączenia: {len(df_merged)} wierszy, {len(df_merged.columns)} kolumn")
     return df_merged

@@ -90,7 +90,7 @@ Pliki rozpoznawane są po nagłówkach — nie musisz nic oznaczać:
 - **Scalanie kolumnowe** — każdy plik dodaje swoje unikalne kolumny do wspólnej osi czasu
 - **Priorytet bazy** — Wahoo > Garmin FIT > Intervals.icu > Garmin sensor > Merged
 - **Priorytet TrainRed** — SmO₂/THb z TrainRed zastępuje te z bazy
-- **Przycinanie ogona** — usuwa wiersze z NaN na końcu (gdy czujnik miał więcej próbek niż baza)
+- **Przycinanie ogona** — usuwa wiersze z NaN na końcu (tylko względem kolumn pliku bazowego — pliki uzupełniające mogą się kończyć wcześniej bez obcinania wyniku)
 - **Obsługa FIT** — parsowanie Garmin `.fit` przez `fitparse`
 - **108 testów** — detekcja, merge, walidacja, pipeline
 
@@ -132,6 +132,25 @@ IntervalsGenerator/
 ```
 
 ---
+
+
+
+---
+
+## 📋 Historia zmian
+
+### 2026-05-21 — Fix przycinania ogona (anchor columns)
+
+Naprawiono błąd, w którym scalony plik był przycinany do długości najkrótszego pliku źródłowego.
+Przyczyną było sprawdzanie **wszystkich kolumn** pod kątem NaN przy określaniu punktu cięcia ogona.
+Pliki uzupełniające (TrainRed, Tymewear) mają legalne luki na końcu — plik bazowy (Wahoo/Garmin) 
+może być dłuższy.
+
+**Fix:** Funkcje `_trim_trailing_incomplete()` i `_validate_and_trim_tail()` przyjmują teraz 
+opcjonalny `anchor_columns`. Gdy jest podany (z `base_df.columns`), tylko kolumny pliku bazowego 
+decydują o punkcie cięcia. Pliki uzupełniające mogą się kończyć wcześniej bez wpływu na wynik.
+
+Zmienione pliki: `quick_merge.py`, `intervals/merger.py`
 
 ## 📄 Licencja
 

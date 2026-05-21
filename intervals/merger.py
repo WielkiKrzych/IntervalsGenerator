@@ -136,11 +136,11 @@ class DataMerger:
             df_merged = self._validate_and_trim_head(df_merged)
 
         if validate_tail:
-            df_merged = self._validate_and_trim_tail(df_merged)
+            df_merged = self._validate_and_trim_tail(df_merged, anchor_columns=list(base_df.columns))
 
         return df_merged
 
-    def _find_complete_rows_mask(self, df: pd.DataFrame) -> pd.Series:
+    def _find_complete_rows_mask(self, df: pd.DataFrame, columns: Optional[list[str]] = None) -> pd.Series:
         """
         Find mask of rows where all values are present (not NaN or empty).
 
@@ -161,6 +161,10 @@ class DataMerger:
                 r"^\s*$", np.nan, regex=True
             )
 
+        if columns is not None:
+            valid_cols = [c for c in columns if c in df_check.columns]
+            if valid_cols:
+                return df_check[valid_cols].notna().all(axis=1)
         return df_check.notna().all(axis=1)
 
     def _validate_and_trim_head(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -215,11 +219,11 @@ class DataMerger:
         self.ui.print_success("Przesunięto dane. Licznik czasu pozostał bez zmian.")
         return df_new
     
-    def _validate_and_trim_tail(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _validate_and_trim_tail(self, df: pd.DataFrame, anchor_columns: Optional[list[str]] = None) -> pd.DataFrame:
         """Validate end of file for incomplete rows."""
         self.ui.print_message("\n✂️  WALIDACJA KOŃCÓWKI PLIKU (Synchronizacja długości)")
 
-        complete_mask = self._find_complete_rows_mask(df)
+        complete_mask = self._find_complete_rows_mask(df, columns=anchor_columns)
         complete_indices = np.where(complete_mask)[0]
         total_rows = len(df)
 
@@ -240,7 +244,7 @@ class DataMerger:
             return df
 
         self.ui.print_warning(
-            f"Automatyczne przycinanie: Znaleziono {to_remove} niepełnych linii na KOŃCU pliku."
+            f"Automatyczne przycinanie względem kolumn bazowych: Znaleziono {to_remove} niepełnych linii na KOŃCU pliku." if anchor_columns is not None else f"Automatyczne przycinanie: Znaleziono {to_remove} niepełnych linii na KOŃCU pliku."
         )
         self.ui.print_message(
             f"   (Całkowita długość: {total_rows}, Ostatni w pełni wypełniony wiersz: {last_valid_pos})"
