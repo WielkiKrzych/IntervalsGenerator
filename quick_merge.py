@@ -726,7 +726,17 @@ def main():
     base_file = None
     base_type = None
 
+    # Sort: prefer "real" Wahoo files (no Garmin extras) as base
+    _garmin_cols = {"heat_strain_index", "heatstrainindex", "skin_temperature"}
+    def _is_garmin_like(f):
+        try:
+            with open(f) as fh:
+                header = fh.readline().lower().lstrip("\ufeff")
+            return bool(_garmin_cols & {c.strip() for c in header.split(",")})
+        except Exception:
+            return True
     if files_by_type["wahoo"]:
+        files_by_type["wahoo"].sort(key=_is_garmin_like)
         base_file = files_by_type["wahoo"][0]
         base_type = "wahoo"
         print(f"\nBaza: Wahoo ({base_file.name})")
@@ -838,6 +848,16 @@ def main():
             df = process_merged(f)
             if not df.empty:
                 other_dfs.append(df)
+
+    # HR priority: always from Wahoo when available
+    if files_by_type["wahoo"]:
+        strip_count = 0
+        for i in range(len(other_dfs)):
+            if "heartrate" in other_dfs[i].columns:
+                other_dfs[i] = other_dfs[i].drop(columns=["heartrate"])
+                strip_count += 1
+        if strip_count > 0:
+            print(f"  -> Priorytet HR: Wahoo zastępuje tętno z {strip_count} źródła/źródeł")
 
     print("\n" + "=" * 60 + "\nŁĄCZENIE DANYCH\n" + "=" * 60)
     df_merged = merge_dataframes(base_df, other_dfs)
