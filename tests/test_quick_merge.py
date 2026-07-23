@@ -205,3 +205,64 @@ def test_quick_merge_trim_nan_tail(quick_merge_script, temp_dir):
     assert len(merged_df) == 3
     # All remaining rows should be complete (no NaN anywhere)
     assert merged_df.notna().all().all()
+
+
+# --- enhance_running_data ---
+
+import importlib.util
+
+
+@pytest.fixture
+def quick_merge_module(quick_merge_script):
+    spec = importlib.util.spec_from_file_location("quick_merge", quick_merge_script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_enhance_running_data_nan_cadence(quick_merge_module):
+    """Dropout czujnika kadencji (NaN w srodku) nie moze crashowac."""
+    df = pd.DataFrame({
+        "VerticalOscillation": [8.1, 8.3, 8.2],
+        "velocity_smooth": [3.0, 3.1, 3.2],
+        "cadence": [85.0, None, 88.0],
+    })
+    out = quick_merge_module.enhance_running_data(df)
+    # Half-cadence podwojona; NaN zachowany (nullable Int64)
+    assert out["cadence"].dropna().tolist() == [170, 176]
+    assert out["cadence"].isna().sum() == 1
+    # Pace nie moze byc dodane jako kolumna (Intervals.icu go nie przyjmuje)
+    assert "pace" not in out.columns
+
+
+def test_enhance_running_data_skips_cycling(quick_merge_module):
+    """Plik rowerowy (brak VerticalOscillation/stance_time) — kadencja nietknieta."""
+    df = pd.DataFrame({
+        "velocity_smooth": [8.0, 8.1],
+        "cadence": [90.0, 92.0],
+        "watts": [250, 255],
+    })
+    out = quick_merge_module.enhance_running_data(df)
+    assert out["cadence"].tolist() == [90.0, 92.0]
+
+
+def test_enhance_running_data_real_full_cadence_not_doubled(quick_merge_module):
+    """Bieg z prawdziwa pelna kadencja (mediana >= 110) nie jest podwajany."""
+    df = pd.DataFrame({
+        "VerticalOscillation": [8.0, 8.0, 8.0],
+        "velocity_smooth": [3.0, 3.1, 3.2],
+        "cadence": [170.0, 172.0, 174.0],
+    })
+    out = quick_merge_module.enhance_running_data(df)
+    assert out["cadence"].tolist() == [170.0, 172.0, 174.0]
+
+
+def test_enhance_running_data_zero_speed_no_crash(quick_merge_module):
+    """Same zera predkosci (postoj) — brak crasha na pace."""
+    df = pd.DataFrame({
+        "VerticalOscillation": [8.0, 8.0],
+        "velocity_smooth": [0.0, 0.0],
+        "cadence": [80.0, 82.0],
+    })
+    out = quick_merge_module.enhance_running_data(df)
+    assert out["cadence"].dropna().tolist() == [160, 164]

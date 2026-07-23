@@ -159,6 +159,41 @@ def _trim_trailing_incomplete(df: pd.DataFrame, anchor_columns: Optional[list[st
     return df
 
 
+def enhance_running_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Enhance running activity data: report pace from velocity_smooth,
+    fix Garmin half-cadence (double it for running).
+
+    Detects running by presence of VerticalOscillation column.
+    """
+    if "VerticalOscillation" not in df.columns and "stance_time" not in df.columns:
+        return df  # Not a running activity
+
+    if "VerticalOscillation" in df.columns:
+        print("    -> Wykryto bieganie (VerticalOscillation)")
+
+    # Report avg pace (no column added — Intervals.icu doesn't accept 'pace')
+    if "velocity_smooth" in df.columns:
+        speed_kmh = df["velocity_smooth"] * 3.6
+        # Guard against division by zero (starting from standstill)
+        pace_min_per_km = (60.0 / speed_kmh.replace(0, float("nan"))).dropna()
+        if not pace_min_per_km.empty:
+            print(f"    -> Srednie tempo: {pace_min_per_km.mean():.2f} min/km")
+
+    # Fix half-cadence: Garmin stores half-cadence for running (70-100 -> 140-200)
+    if "cadence" in df.columns:
+        cadence_valid = df["cadence"].dropna()
+        # Mediana odporna na segmenty marszu; sanity-check przed podwojeniem
+        if not cadence_valid.empty and cadence_valid.median() < 110:
+            doubled = (df["cadence"] * 2).round(0)
+            if doubled.max() <= 230:  # wynik musi byc fizjologiczny
+                # nullable Int64 — nie wywali sie na NaN (dropout czujnika)
+                df["cadence"] = doubled.astype("Int64")
+                print(f"    -> Podwojono kadencje (half-cadence, mediana: {cadence_valid.median():.0f} -> {df['cadence'].dropna().mean():.0f} spm)")
+
+    return df
+
+
 # --- File type detection ---
 
 def detect_file_type(filepath: Path) -> Optional[str]:
@@ -284,7 +319,10 @@ def process_intervals(filepath: Path) -> pd.DataFrame:
     df = _trim_leading_nan(df, HEAD_TRIM_KEY_COLUMNS)
 
     # Remove trailing empty rows
-    df = _trim_trailing_incomplete(df)
+    df = _trim_trailing_incomplete(df, anchor_columns=HEAD_TRIM_KEY_COLUMNS)
+
+    # Running-specific enhancements (pace, half-cadence fix)
+    df = enhance_running_data(df)
 
     print(f"    -> Wynik: {len(df)} wierszy, {len(df.columns)} kolumn: {list(df.columns)}")
     return df
@@ -424,6 +462,9 @@ def process_fit(filepath: Path) -> pd.DataFrame:
 
     # Remove leading rows with NaN in key columns
     df = _trim_leading_nan(df, HEAD_TRIM_KEY_COLUMNS)
+
+    # Running-specific enhancements for FIT files
+    df = enhance_running_data(df)
 
     print(f"    -> {len(df)} wierszy, {len(df.columns)} kolumn: {list(df.columns)}")
     return df
@@ -653,8 +694,10 @@ def merge_dataframes(
     print(f"\n  Łączenie {len(all_dfs)} DataFrame'ów...")
     df_merged = pd.concat(all_dfs, axis=1)
 
-    # Trim trailing rows (strict: all columns must have values)
-    df_merged = _trim_trailing_incomplete(df_merged, anchor_columns=list(base_df.columns))
+    # Trim trailing rows. Kotwica bez 'cadence' — dropout czujnika kadencji
+    # na koncu nie moze uciac wierszy z poprawna moca/HR.
+    _tail_anchor = [c for c in HEAD_TRIM_KEY_COLUMNS if c != "cadence"]
+    df_merged = _trim_trailing_incomplete(df_merged, anchor_columns=_tail_anchor)
 
     print(f"    Wynik łączenia: {len(df_merged)} wierszy, {len(df_merged.columns)} kolumn")
     return df_merged
