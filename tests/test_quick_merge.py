@@ -266,3 +266,49 @@ def test_enhance_running_data_zero_speed_no_crash(quick_merge_module):
     })
     out = quick_merge_module.enhance_running_data(df)
     assert out["cadence"].dropna().tolist() == [160, 164]
+
+
+# --- Wyrownanie po czasie (merge_dataframes) ---
+
+def test_merge_time_align_interior_gap(quick_merge_module):
+    """Luka w srodku zrodla: SmO2 nie moze sie przesunac (cichy shift)."""
+    base = pd.DataFrame({"time": [0, 1, 2, 3, 4], "watts": [100, 110, 120, 130, 140]})
+    aux = pd.DataFrame({"second": [0, 1, 3, 4], "smo2": [60, 61, 63, 64]})
+    res = quick_merge_module.merge_dataframes(base, [aux])
+    assert len(res) == 5
+    assert pd.isna(res.loc[2, "smo2"])      # brak sekundy 2 -> uczciwy NaN
+    assert res.loc[3, "smo2"] == 63.0        # sekunda 3 zostaje przy 3
+    assert res.loc[4, "smo2"] == 64.0
+    assert "second" not in res.columns       # klucz aux nie wycieka
+
+
+def test_merge_time_align_offset_start(quick_merge_module):
+    """Zrodlo z przesunietym wlasnym zegarem — normalizacja do 0 wyrownuje."""
+    base = pd.DataFrame({"time": [0, 1, 2, 3], "watts": [100, 110, 120, 130]})
+    # TrainRed liczy czas od 1000; po normalizacji -> 0,1,2,3
+    aux = pd.DataFrame({"second": [1000, 1001, 1002, 1003], "smo2": [60, 61, 62, 63]})
+    res = quick_merge_module.merge_dataframes(base, [aux])
+    assert res["smo2"].tolist() == [60.0, 61.0, 62.0, 63.0]
+
+
+def test_merge_positional_fallback_no_key(quick_merge_module):
+    """Zrodlo bez klucza czasu -> laczenie pozycyjne (zachowanie jak dawniej)."""
+    base = pd.DataFrame({"time": [0, 1, 2], "watts": [100, 110, 120]})
+    aux = pd.DataFrame({"smo2": [60, 61, 62]})  # brak time/secs/second
+    res = quick_merge_module.merge_dataframes(base, [aux])
+    assert res["smo2"].tolist() == [60.0, 61.0, 62.0]
+
+
+def test_merge_base_without_time_key_positional(quick_merge_module):
+    """Baza bez klucza czasu -> pelny fallback pozycyjny, klucz aux odrzucony."""
+    base = pd.DataFrame({"watts": [100, 110, 120]})  # brak time/secs
+    aux = pd.DataFrame({"second": [0, 1, 2], "smo2": [60, 61, 62]})
+    res = quick_merge_module.merge_dataframes(base, [aux])
+    assert res["smo2"].tolist() == [60.0, 61.0, 62.0]
+    assert "second" not in res.columns
+
+
+def test_norm_seconds_zero_based(quick_merge_module):
+    """_norm_seconds sprowadza do 0-based int, odporne na float i NaN."""
+    out = quick_merge_module._norm_seconds(pd.Series([10.0, 11.0, 13.0]))
+    assert out.tolist() == [0, 1, 3]

@@ -525,6 +525,9 @@ def process_trainred(filepath: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     df_out = pd.DataFrame(result_cols)
+    # Zachowaj klucz czasu (0-based) do wyrownania po sekundach w merge_dataframes
+    if "second" in df_agg.columns:
+        df_out.insert(0, "second", _norm_seconds(df_agg["second"]))
     print(f"    -> {len(df_out)} wierszy, kolumny: {list(df_out.columns)}")
     return df_out
 
@@ -591,7 +594,14 @@ def process_tymewear(filepath: Path) -> pd.DataFrame:
 
     for col in df_out.columns:
         df_out[col] = pd.to_numeric(df_out[col], errors="coerce")
-    df_out = df_out.dropna(how="all")
+
+    # Zachowaj klucz czasu (0-based) do wyrownania po sekundach w merge_dataframes
+    time_col = next((c for c in df.columns if str(c).strip().lower() == "time"), None)
+    if time_col is not None:
+        df_out.insert(0, "second", _norm_seconds(df[time_col]))
+        df_out = df_out.dropna(how="all", subset=[c for c in df_out.columns if c != "second"])
+    else:
+        df_out = df_out.dropna(how="all")
 
     print(f"    -> {len(df_out)} wierszy, kolumny: {list(df_out.columns)}")
     return df_out
@@ -625,6 +635,52 @@ def process_garmin_sensor(filepath: Path) -> pd.DataFrame:
 
 
 # --- Merge logic ---
+
+# Rozpoznawane klucze czasu (elapsed seconds), w kolejnosci preferencji
+TIME_KEY_CANDIDATES = ("time", "secs", "second")
+
+
+def _detect_time_key(df: pd.DataFrame) -> Optional[str]:
+    """Zwroc nazwe kolumny czasu w df (time/secs/second), albo None."""
+    lower_map = {str(c).strip().lower(): c for c in df.columns}
+    for cand in TIME_KEY_CANDIDATES:
+        if cand in lower_map:
+            return lower_map[cand]
+    return None
+
+
+def _norm_seconds(series: pd.Series) -> pd.Series:
+    """
+    Znormalizuj kolumne czasu do 0-based calkowitych sekund.
+
+    Kazde urzadzenie liczy czas od wlasnego startu; sprowadzenie do
+    'sekund od pierwszej probki' pozwala wyrownac zrodla po wspolnej siatce.
+    """
+    numeric = pd.to_numeric(series, errors="coerce")
+    if numeric.notna().any():
+        numeric = numeric - numeric.min()
+    return numeric.round(0).astype("Int64")
+
+
+def _align_by_time(
+    base_sec: pd.Series, aux: pd.DataFrame, aux_key: str
+) -> pd.DataFrame:
+    """
+    Wyrownaj aux do siatki sekund bazy (base_sec) po kluczu czasu.
+
+    Zwraca DataFrame o dokladnie len(base_sec) wierszach, kolumny aux
+    wyrownane po sekundzie; luki (brak sekundy w aux) -> NaN.
+    Kolumna klucza aux jest usuwana z wyniku.
+    """
+    aux = aux.copy()
+    aux["_sec"] = _norm_seconds(aux[aux_key])
+    aux = aux.drop(columns=[aux_key])
+    # Przy 1Hz sekundy sa unikalne; gdyby nie — bierzemy pierwsza probke
+    aux = aux.dropna(subset=["_sec"]).drop_duplicates(subset=["_sec"])
+    aux = aux.set_index("_sec")
+    aligned = aux.reindex(base_sec.values).reset_index(drop=True)
+    return aligned
+
 
 def merge_dataframes(
     base_df: pd.DataFrame, other_dfs: List[pd.DataFrame]
@@ -663,8 +719,17 @@ def merge_dataframes(
             print(f"    -> Priorytet TrainRed: usuwam {dropped} z bazy")
         base_df = stripped
 
-    all_dfs = [base_df.reset_index(drop=True)]
+    base_df = base_df.reset_index(drop=True)
     seen_columns = set(base_df.columns)
+
+    # Klucz czasu bazy — jesli jest, wyrownujemy zrodla po sekundach;
+    # jesli nie, spadamy do laczenia pozycyjnego (zachowanie jak dawniej).
+    base_key = _detect_time_key(base_df)
+    base_sec = _norm_seconds(base_df[base_key]) if base_key is not None else None
+
+    all_dfs = [base_df]
+    n_time_aligned = 0
+    n_positional = 0
 
     for df in other_dfs:
         if df.empty:
@@ -680,18 +745,39 @@ def merge_dataframes(
                 print(f"    -> Priorytet TrainRed: usuwam {dropped} z innych źródeł")
             df_reset = stripped
 
-        duplicates = [col for col in df_reset.columns if col in seen_columns]
+        # Klucz czasu zrodla (wykryj PRZED odrzuceniem duplikatow, bo bazowy
+        # 'time'/'secs' bylby uznany za duplikat i usuniety)
+        aux_key = _detect_time_key(df_reset)
+
+        # Odrzuc duplikaty kolumn (poza wlasnym kluczem czasu)
+        duplicates = [
+            col for col in df_reset.columns
+            if col in seen_columns and col != aux_key
+        ]
         if duplicates:
             print(f"    -> Pomijam duplikaty kolumn: {duplicates}")
             df_reset = df_reset.drop(columns=duplicates)
 
-        if df_reset.empty or len(df_reset.columns) == 0:
+        # Zostaly tylko kolumny danych (bez klucza)?
+        data_cols = [c for c in df_reset.columns if c != aux_key]
+        if not data_cols:
             continue
 
-        all_dfs.append(df_reset)
-        seen_columns.update(df_reset.columns)
+        if base_sec is not None and aux_key is not None:
+            # Wyrownanie po sekundach — odporne na przesuniety start i luki
+            aligned = _align_by_time(base_sec, df_reset, aux_key)
+            all_dfs.append(aligned)
+            seen_columns.update(aligned.columns)
+            n_time_aligned += 1
+        else:
+            # Fallback pozycyjny (brak klucza czasu w bazie lub zrodle)
+            df_reset = df_reset.drop(columns=[aux_key]) if aux_key is not None else df_reset
+            all_dfs.append(df_reset)
+            seen_columns.update(df_reset.columns)
+            n_positional += 1
 
-    print(f"\n  Łączenie {len(all_dfs)} DataFrame'ów...")
+    print(f"\n  Łączenie {len(all_dfs)} DataFrame'ów "
+          f"({n_time_aligned} po czasie, {n_positional} pozycyjnie)...")
     df_merged = pd.concat(all_dfs, axis=1)
 
     # Trim trailing rows. Kotwica bez 'cadence' — dropout czujnika kadencji
