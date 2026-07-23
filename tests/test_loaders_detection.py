@@ -10,6 +10,7 @@ class TestTrainRedDetection:
         config = Mock()
         config.trainred_dir = Path("/tmp/trainred")
         config.trainred_old_dir = Path("/tmp/trainred_old")
+        config.HEADER_SCAN_MAX_LINES = 60  # loader czyta to przy detekcji po zawartosci
         return TrainRedLoader(config, Mock(), Mock())
 
     def test_detect_by_content_smo2_thb(self, loader):
@@ -47,6 +48,7 @@ class TestTymewearDetection:
         config = Mock()
         config.tymewear_dir = Path("/tmp/tymewear")
         config.tymewear_old_dir = Path("/tmp/tymewear_old")
+        config.HEADER_SCAN_MAX_LINES = 60  # loader czyta to przy detekcji po zawartosci
         return TymewearLoader(config, Mock(), Mock())
 
     def test_detect_case_insensitive(self, loader):
