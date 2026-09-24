@@ -55,7 +55,7 @@ FIT_FIELD_MAPPING = {
     "distance": "distance",
     "position_lat": "lat",
     "position_long": "lng",
-    "temperature": "temperature",
+    "temperature": "temp",
     "vertical_oscillation": "VerticalOscillation",
     "stance_time": "stance_time",
     "stance_time_percent": "stance_time_percent",
@@ -69,6 +69,29 @@ FIT_FIELD_MAPPING = {
     "tyme_tidal_volume": "tidal_volume",
     "tyme_minute_volume": "TymeVentilation",
 }
+
+# Nazwy strumieni akceptowane przez Intervals.icu. Zweryfikowane 24.09.2026
+# przez GET /api/v1/activity/{id}/streams?types=<nazwa> — nieznana nazwa zwraca
+# 422 "Invalid stream type [x]", tym samym bledem sypie upload CSV.
+ICU_VALID_STREAMS = {
+    "time", "watts", "cadence", "heartrate", "distance", "velocity_smooth",
+    "altitude", "latlng", "moving", "grade_smooth", "torque",
+    "temp", "left_right_balance", "hrv", "respiration",
+    "smo2", "smo2_2", "THb", "thb", "thb_2", "O2Hb", "HHb",
+    "core_temperature", "skin_temperature", "heat_strain_index",
+    "HeatStrainIndex", "PercentageinZ2",
+    "TymeBreathRate", "TymeVentilation", "tidal_volume", "tidal_volume_min",
+    "VerticalOscillation", "vertical_oscillation", "vertical_ratio",
+    "stance_time", "stance_time_percent", "stance_time_balance", "step_length",
+    "Ground_Time", "Air_Power", "leg_spring_stiffness",
+}
+
+# Nazwy, ktore API odrzuca jako typ strumienia, ale ktore wychodza z naszych
+# loaderow (Garmin/Intervals eksportuja 'secs'/'speed', GPS jako lat+lng).
+# Zostaja przepuszczone, bo tak dzialaly wczesniejsze importy — parser CSV
+# Intervals moze miec wlasne aliasy. Jesli upload sypnie "Invalid stream type
+# [secs]" albo "[speed]", przemianuj je na time/velocity_smooth.
+ICU_UNVERIFIED_COLUMNS = {"secs", "speed", "lat", "lng"}
 
 # Key columns for head-trimming validation (ignore always-empty columns like torque)
 HEAD_TRIM_KEY_COLUMNS = ["heartrate", "cadence", "velocity_smooth", "distance"]
@@ -191,6 +214,16 @@ def enhance_running_data(df: pd.DataFrame) -> pd.DataFrame:
                 df["cadence"] = doubled.astype("Int64")
                 print(f"    -> Podwojono kadencje (half-cadence, mediana: {cadence_valid.median():.0f} -> {df['cadence'].dropna().mean():.0f} spm)")
 
+    return df
+
+
+def sanitize_for_intervals(df: pd.DataFrame) -> pd.DataFrame:
+    """Usun kolumny, ktore Intervals.icu odrzuci przy uploadzie (422 Invalid stream type)."""
+    allowed = ICU_VALID_STREAMS | ICU_UNVERIFIED_COLUMNS
+    invalid = [c for c in df.columns if c not in allowed]
+    if invalid:
+        print(f"  Usuwam kolumny nieznane Intervals.icu: {invalid}")
+        df = df.drop(columns=invalid)
     return df
 
 
@@ -439,6 +472,7 @@ def process_fit(filepath: Path) -> pd.DataFrame:
     # Convert speed m/s -> km/h
     if "speed_m_s" in df.columns:
         df["velocity_smooth"] = (df["speed_m_s"] * 3.6).round(3)
+        df = df.drop(columns=["speed_m_s"])
 
     # Convert vertical oscillation from mm to cm
     if "VerticalOscillation" in df.columns:
@@ -1018,6 +1052,8 @@ def main():
             output_dir = Path.cwd()
 
         output_path = output_dir / output_filename
+
+    df_merged = sanitize_for_intervals(df_merged)
 
     df_merged.to_csv(output_path, index=False)
 

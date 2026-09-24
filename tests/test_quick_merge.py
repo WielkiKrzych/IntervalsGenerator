@@ -312,3 +312,43 @@ def test_norm_seconds_zero_based(quick_merge_module):
     """_norm_seconds sprowadza do 0-based int, odporne na float i NaN."""
     out = quick_merge_module._norm_seconds(pd.Series([10.0, 11.0, 13.0]))
     assert out.tolist() == [0, 1, 3]
+
+
+# --- Regresja: Intervals.icu 422 "Invalid stream type" ---
+
+def test_sanitize_drops_unknown_stream_names():
+    """Kolumny nieznane Intervals.icu nie moga trafic do pliku importu."""
+    import quick_merge
+
+    df = pd.DataFrame({
+        "time": [0, 1],
+        "watts": [200, 210],
+        "velocity_smooth": [8.9, 9.0],
+        "speed_m_s": [8.9, 9.0],
+        "temperature": [20.0, 20.0],
+    })
+    out = quick_merge.sanitize_for_intervals(df)
+    assert list(out.columns) == ["time", "watts", "velocity_smooth"]
+
+
+def test_sanitize_keeps_sensor_streams():
+    """Strumienie czujnikow (TrainRed/Tymewear/CORE) i klucze czasu zostaja."""
+    import quick_merge
+
+    cols = [
+        "secs", "speed", "smo2", "THb", "TymeBreathRate", "TymeVentilation",
+        "tidal_volume", "tidal_volume_min", "core_temperature",
+        "skin_temperature", "heat_strain_index", "HeatStrainIndex",
+        "PercentageinZ2", "hrv", "respiration", "lat", "lng",
+    ]
+    df = pd.DataFrame({c: [1.0, 2.0] for c in cols})
+    out = quick_merge.sanitize_for_intervals(df)
+    assert list(out.columns) == cols
+
+
+def test_fit_temperature_maps_to_icu_temp():
+    """FIT 'temperature' musi wyjsc jako 'temp' — Intervals odrzuca 'temperature'."""
+    import quick_merge
+
+    assert quick_merge.FIT_FIELD_MAPPING["temperature"] == "temp"
+    assert "speed_m_s" not in quick_merge.ICU_VALID_STREAMS
