@@ -52,6 +52,12 @@
 	<string>This script needs access to your camera to run.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>This script needs access to your contacts to run.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>MergeCSV potrzebuje dostępu do plików CSV/FIT, które na niego przeciągasz.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>MergeCSV potrzebuje dostępu do plików CSV/FIT, które na niego przeciągasz.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>MergeCSV potrzebuje dostępu do plików CSV/FIT, które na niego przeciągasz.</string>
 	<key>NSHomeKitUsageDescription</key>
 	<string>This script needs access to your HomeKit Home to run.</string>
 	<key>NSMicrophoneUsageDescription</key>

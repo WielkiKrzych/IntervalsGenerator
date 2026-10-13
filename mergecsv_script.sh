@@ -1,7 +1,7 @@
 #!/bin/bash
 # MergeCSV Droplet
 
-PYTHON="/opt/homebrew/bin/python3"
+PYTHON="/Users/wielkikrzychmbp/.venvs/mergecsv/bin/python"
 SCRIPT="$HOME/Documents/IntervalsGenerator/quick_merge.py"
 
 if [ $# -eq 0 ]; then

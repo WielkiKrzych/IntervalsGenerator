@@ -12,7 +12,7 @@ on open theFiles
 	end repeat
 	
 	-- Zbuduj komendę shell
-	set pythonPath to "/opt/homebrew/bin/python3"
+	set pythonPath to "/Users/wielkikrzychmbp/.venvs/mergecsv/bin/python"
 	set scriptPath to POSIX path of ((path to home folder as text) & "Documents:IntervalsGenerator:quick_merge.py")
 	
 	set shellCmd to quoted form of pythonPath & " " & quoted form of scriptPath
