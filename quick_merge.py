@@ -464,8 +464,9 @@ def process_fit(filepath: Path) -> pd.DataFrame:
 
     # Fix running cadence: Garmin stores half-cadence for running
     if "cadence" in df.columns:
-        frac = df.get("fractional_cadence", 0)
-        df["cadence"] = ((df["cadence"] + frac) * 2).round(0).astype(int)
+        frac = df["fractional_cadence"].fillna(0) if "fractional_cadence" in df.columns else 0
+        cadence = ((df["cadence"] + frac) * 2).round(0)
+        df["cadence"] = cadence.astype("Int64" if cadence.hasnans else int)
     if "fractional_cadence" in df.columns:
         df = df.drop(columns=["fractional_cadence"])
 
@@ -494,8 +495,9 @@ def process_fit(filepath: Path) -> pd.DataFrame:
         df["time"] = df["_elapsed_sec"].astype(int)
         df = df.drop(columns=["_elapsed_sec"])
 
-    # Remove leading rows with NaN in key columns
-    df = _trim_leading_nan(df, HEAD_TRIM_KEY_COLUMNS)
+    # A cadence dropout must not remove the rest of the FIT record.
+    fit_head_keys = [col for col in HEAD_TRIM_KEY_COLUMNS if col != "cadence"]
+    df = _trim_leading_nan(df, fit_head_keys)
 
     # Running-specific enhancements for FIT files
     df = enhance_running_data(df)
@@ -562,6 +564,7 @@ def process_trainred(filepath: Path) -> pd.DataFrame:
     # Zachowaj klucz czasu (0-based) do wyrownania po sekundach w merge_dataframes
     if "second" in df_agg.columns:
         df_out.insert(0, "second", _norm_seconds(df_agg["second"]))
+        df_out.attrs["elapsed_time_key"] = "second"
     print(f"    -> {len(df_out)} wierszy, kolumny: {list(df_out.columns)}")
     return df_out
 
@@ -634,6 +637,7 @@ def process_tymewear(filepath: Path) -> pd.DataFrame:
     if time_col is not None:
         df_out.insert(0, "second", _norm_seconds(df[time_col]))
         df_out = df_out.dropna(how="all", subset=[c for c in df_out.columns if c != "second"])
+        df_out.attrs["elapsed_time_key"] = "second"
     else:
         df_out = df_out.dropna(how="all")
 
@@ -707,7 +711,11 @@ def _align_by_time(
     Kolumna klucza aux jest usuwana z wyniku.
     """
     aux = aux.copy()
-    aux["_sec"] = _norm_seconds(aux[aux_key])
+    # Loaders can set time zero before filtering out empty samples.
+    if aux.attrs.get("elapsed_time_key") == aux_key:
+        aux["_sec"] = aux[aux_key]
+    else:
+        aux["_sec"] = _norm_seconds(aux[aux_key])
     aux = aux.drop(columns=[aux_key])
     # Przy 1Hz sekundy sa unikalne; gdyby nie — bierzemy pierwsza probke
     aux = aux.dropna(subset=["_sec"]).drop_duplicates(subset=["_sec"])

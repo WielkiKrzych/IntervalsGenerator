@@ -1,6 +1,8 @@
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 import pandas as pd
 import pytest
 
@@ -35,6 +37,25 @@ def test_quick_merge_no_wahoo(quick_merge_script, temp_dir):
     )
     assert result.returncode == 1
     assert "Nie znaleziono pliku bazowego" in result.stdout
+
+
+def test_quick_merge_preserves_tymewear_start_delay(quick_merge_script, tmp_path):
+    wahoo = tmp_path / "Wahoo.csv"
+    wahoo.write_text("time,watts,heartrate\n0,100,110\n1,110,112\n2,120,114\n3,130,116\n")
+    tymewear = tmp_path / "tymewear.csv"
+    tymewear.write_text("Time,BR,VT,VE\n100,,,\n101,,,\n102,16.36,82.6,22.59\n103,17.5,84.5,23.03\n")
+    output = tmp_path / "merged.csv"
+
+    result = subprocess.run(
+        [sys.executable, str(quick_merge_script), str(wahoo), str(tymewear), "-o", str(output)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    breath_rate = pd.read_csv(output).set_index("time")["TymeBreathRate"]
+    assert breath_rate.loc[[0, 1]].isna().all()
+    assert breath_rate.loc[[2, 3]].tolist() == [16.36, 17.5]
 
 
 def test_quick_merge_success(quick_merge_script, temp_dir):
@@ -218,6 +239,31 @@ def quick_merge_module(quick_merge_script):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_process_fit_preserves_records_with_missing_cadence(quick_merge_module, monkeypatch, tmp_path):
+    start = datetime(2026, 1, 19, 10)
+    records = []
+    for second, (cadence, fractional_cadence) in enumerate([(86, 0.5), (None, None), (88, None)]):
+        fields = {
+            "timestamp": start + timedelta(seconds=second),
+            "cadence": cadence,
+            "fractional_cadence": fractional_cadence,
+            "heart_rate": 120 + second,
+            "vertical_oscillation": 80 + second,
+        }
+        records.append(SimpleNamespace(fields=[
+            SimpleNamespace(name=name, value=value) for name, value in fields.items()
+        ]))
+    fit_file = SimpleNamespace(get_messages=lambda name: records if name == "record" else [])
+    monkeypatch.setitem(sys.modules, "fitparse", SimpleNamespace(FitFile=lambda _: fit_file))
+
+    result = quick_merge_module.process_fit(tmp_path / "run.fit")
+
+    assert result["time"].tolist() == [0, 1, 2]
+    assert result["heartrate"].tolist() == [120, 121, 122]
+    assert result["cadence"].dropna().tolist() == [173, 176]
+    assert pd.isna(result.loc[1, "cadence"])
 
 
 def test_enhance_running_data_nan_cadence(quick_merge_module):
